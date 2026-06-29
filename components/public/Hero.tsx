@@ -17,8 +17,11 @@ export function Hero({
   title: string;
   tagline: string;
 }) {
-  // Inline fallbacks guarantee the backdrop renders at full size.
-  const verbSize = "clamp(4.5rem, 22vw, 20rem)";
+  // Inline fallbacks mirror the .hero-verbs CSS so the backdrop renders even if
+  // the stylesheet loads late. Sized to stay contained on the right (no bleed).
+  const verbSize = "clamp(2.5rem, 11vw, 9.5rem)";
+  const outlineStroke = "0.12vw color-mix(in srgb, var(--color-sand) 28%, transparent)";
+  const accentStroke = "0.14vw color-mix(in srgb, var(--color-ember) 45%, transparent)";
 
   return (
     <section className="relative flex min-h-[100svh] items-center overflow-hidden">
@@ -26,41 +29,39 @@ export function Hero({
       <div aria-hidden className="hero-gradient absolute inset-0 -z-20" />
       <div aria-hidden className="bg-grain absolute inset-0 -z-20 opacity-40" />
 
-      {/* Oversized verb backdrop — pure text conveying Run · Jump · Throw · Grow */}
+      {/* Outlined verb backdrop — kinetic "Run · Jump · Throw · Grow" texture,
+          anchored to the right and kept low-contrast so it never fights the copy. */}
       <div
         aria-hidden
-        className="hero-verbs pointer-events-none absolute inset-0 -z-10 flex flex-col items-end justify-center pr-[2vw]"
+        className="hero-verbs pointer-events-none absolute inset-y-0 right-0 -z-10 flex flex-col items-end justify-center gap-[0.4vh] pr-[4vw] opacity-50 sm:opacity-60"
       >
         {HERO_VERBS.map((v) => (
           <span
             key={v.word}
             className={v.accent ? "is-accent" : "is-outline"}
-            style={
-              v.accent
-                ? { fontSize: verbSize, color: "var(--color-ember)" }
-                : {
-                    fontSize: verbSize,
-                    color: "transparent",
-                    WebkitTextStroke: "0.22vw rgba(184,171,152,0.45)",
-                  }
-            }
+            style={{
+              fontSize: verbSize,
+              color: "transparent",
+              WebkitTextStroke: v.accent ? accentStroke : outlineStroke,
+            }}
           >
             {v.word}
           </span>
         ))}
       </div>
 
-      {/* Left-to-right scrim keeps foreground copy legible over the verbs */}
+      {/* Scrim: keeps the left-aligned copy fully legible while letting the
+          outlined verbs fade in on the right. */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 bg-gradient-to-r from-ink via-ink/80 to-ink/20"
+        className="absolute inset-0 -z-10 bg-gradient-to-r from-ink from-30% via-ink/65 to-transparent"
       />
 
       {/* Foreground copy */}
       <div className="relative mx-auto w-full max-w-6xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className="eyebrow mb-4 text-flame">{eyebrow}</p>
-          <h1 className="font-display text-5xl uppercase leading-[0.9] text-cream sm:text-7xl md:text-8xl lg:text-[7rem]">
+          <h1 className="font-display text-[2.75rem] uppercase leading-[0.95] text-cream sm:text-6xl md:text-7xl lg:text-[5.5rem]">
             {title.split(" ").map((word, i) => (
               <span
                 key={i}

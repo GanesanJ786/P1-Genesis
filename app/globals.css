@@ -128,25 +128,30 @@ html.lenis body {
     linear-gradient(160deg, var(--color-ink-soft) 0%, var(--color-ink) 45%, #000 100%);
 }
 
-/* Oversized verb stack that replaces the old hero image. */
+/* Oversized verb stack that sits BEHIND the hero copy as a refined, outlined
+   typographic texture — bold but intentionally low-contrast so it never
+   competes with the foreground headline. */
 .hero-verbs {
   font-family: var(--font-display);
-  line-height: 0.82;
+  line-height: 0.92;
   text-transform: uppercase;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   -webkit-user-select: none;
   user-select: none;
 }
 .hero-verbs span {
   display: block;
-  /* Big, image-scale typography: ~22vw, clamped so it never gets too small/huge. */
-  font-size: clamp(4.5rem, 22vw, 20rem);
+  /* Large but contained, so words don't bleed off-screen or overlap the copy. */
+  font-size: clamp(2.5rem, 11vw, 9.5rem);
 }
 .hero-verbs .is-outline {
   color: transparent;
-  -webkit-text-stroke: clamp(1.5px, 0.28vw, 4px)
-    color-mix(in srgb, var(--color-sand) 45%, transparent);
+  -webkit-text-stroke: clamp(1px, 0.12vw, 2px)
+    color-mix(in srgb, var(--color-sand) 22%, transparent);
 }
+/* Accent verb: a subtle ember outline (no heavy solid fill). */
 .hero-verbs .is-accent {
-  color: var(--color-ember);
+  color: transparent;
+  -webkit-text-stroke: clamp(1px, 0.14vw, 2.5px)
+    color-mix(in srgb, var(--color-ember) 42%, transparent);
 }
