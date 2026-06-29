@@ -1,0 +1,9 @@
+# Minimal Supabase CLI config. Set project_id to your linked project ref.
+project_id = "genesis-trackfest"
+
+[db]
+major_version = 15
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"

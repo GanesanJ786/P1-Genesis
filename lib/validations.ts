@@ -1,0 +1,66 @@
+import { z } from "zod";
+
+/** Shared Zod schemas — used by both client forms and server actions. */
+
+export const eventSchema = z.object({
+  title: z.string().min(2, "Title is required").max(160),
+  slug: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens only"),
+  summary: z.string().max(400).optional().or(z.literal("")),
+  body: z.string().max(8000).optional().or(z.literal("")),
+  cover_image: z.string().optional().or(z.literal("")),
+  start_date: z.string().optional().or(z.literal("")),
+  end_date: z.string().optional().or(z.literal("")),
+  location: z.string().max(200).optional().or(z.literal("")),
+  status: z.enum(["draft", "published", "archived"]),
+  sort_order: z.coerce.number().int().default(0),
+  registration_url: z
+    .string()
+    .url("Enter a valid URL")
+    .optional()
+    .or(z.literal("")),
+  media_links: z.string().max(4000).optional().or(z.literal("")),
+});
+export type EventInput = z.infer<typeof eventSchema>;
+
+export const slideSchema = z.object({
+  group_key: z.string().min(1).default("home_hero"),
+  title: z.string().max(160).optional().or(z.literal("")),
+  subtitle: z.string().max(280).optional().or(z.literal("")),
+  image_path: z.string().min(1, "An image is required"),
+  link_url: z.string().max(400).optional().or(z.literal("")),
+  sort_order: z.coerce.number().int().default(0),
+  is_active: z.boolean().default(true),
+});
+export type SlideInput = z.infer<typeof slideSchema>;
+
+export const sponsorSchema = z.object({
+  name: z.string().min(2, "Name is required").max(160),
+  tier: z.enum(["title", "platinum", "gold", "silver", "supporter"]),
+  logo_path: z.string().optional().or(z.literal("")),
+  website_url: z.string().url("Enter a valid URL").optional().or(z.literal("")),
+  amount_inr: z.coerce.number().int().nonnegative().optional(),
+  is_active: z.boolean().default(true),
+  sort_order: z.coerce.number().int().default(0),
+});
+export type SponsorInput = z.infer<typeof sponsorSchema>;
+
+export const teamMemberSchema = z.object({
+  name: z.string().min(2, "Name is required").max(160),
+  role_title: z.string().max(160).optional().or(z.literal("")),
+  bio: z.string().max(2000).optional().or(z.literal("")),
+  photo_path: z.string().optional().or(z.literal("")),
+  sort_order: z.coerce.number().int().default(0),
+  is_active: z.boolean().default(true),
+});
+export type TeamMemberInput = z.infer<typeof teamMemberSchema>;
+
+export const contactSchema = z.object({
+  name: z.string().min(2, "Please enter your name").max(120),
+  email: z.string().email("Enter a valid email"),
+  phone: z.string().max(40).optional().or(z.literal("")),
+  message: z.string().min(5, "Tell us a little more").max(2000),
+});
+export type ContactInput = z.infer<typeof contactSchema>;
