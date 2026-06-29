@@ -158,10 +158,10 @@ export default async function HomePage() {
       <Section>
         <Container>
           <SectionHeading eyebrow="Leadership" title="The People Behind It" />
-          <TeamGrid members={team.slice(0, 3)} />
+          <TeamGrid members={team} />
           <div className="mt-10">
             <ButtonLink href="/team" variant="ghost">
-              Meet the Full Team <ArrowRight size={16} />
+              More About the Team <ArrowRight size={16} />
             </ButtonLink>
           </div>
         </Container>
