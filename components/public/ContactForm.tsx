@@ -60,7 +60,7 @@ export function ContactForm() {
           required
           rows={5}
           className={inputClass}
-          placeholder="Tell us how you'd like to partner with Genesis Track Fest..."
+          placeholder="Tell us how you'd like to be involved with Genesis Sports Foundation..."
         />
       </div>
 

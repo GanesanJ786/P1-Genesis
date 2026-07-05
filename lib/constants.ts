@@ -1,11 +1,14 @@
 /** Static brand + site configuration. Editable copy lives in site_content (DB). */
 
 export const SITE = {
-  name: "Genesis Track Fest 2026",
-  shortName: "Genesis Track Fest",
+  // Primary identity = the Foundation. Genesis Track Fest is one event it runs
+  // (see about-event / live / sponsorship), not the site's headline brand.
+  name: "Genesis Sports Foundation",
+  shortName: "Genesis Sports Foundation",
+  headline: "Athletics Coaching in Coimbatore",
   tagline: "Run · Jump · Throw · Grow",
   description:
-    "Coimbatore's 1st Junior & Senior Athletic Championship. Nehru Stadium, 31 July & 1 August 2026. Organised by Genesis Sports Foundation.",
+    "Genesis Sports Foundation — accessible athletics coaching in Coimbatore, turning grassroots talent into national & international medal winners.",
   url: "https://gsfcbe.com",
   organiser: "Genesis Sports Foundation",
   venue: "Nehru Stadium, Coimbatore",

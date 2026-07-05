@@ -36,7 +36,7 @@ export function Navbar() {
         <Link
           href="/"
           className="group flex items-center gap-2.5"
-          aria-label="Genesis Track Fest — home"
+          aria-label="Genesis Sports Foundation — home"
         >
           <Image
             src="/brand/genesis-emblem.png"
@@ -46,12 +46,12 @@ export function Navbar() {
             priority
             className="h-8 w-auto transition-transform duration-300 group-hover:scale-105 sm:h-9"
           />
-          <span className="font-display text-lg uppercase tracking-tight text-cream sm:text-xl">
-            Genesis<span className="text-ember"> Track Fest</span>
+          <span className="whitespace-nowrap font-display text-base uppercase tracking-tight text-cream sm:text-lg">
+            Genesis<span className="text-ember"> Sports Foundation</span>
           </span>
         </Link>
 
-        <div className="hidden items-center gap-7 lg:flex">
+        <div className="hidden items-center gap-6 lg:flex">
           {NAV_LINKS.map((link) => {
             const active =
               link.href === "/"
