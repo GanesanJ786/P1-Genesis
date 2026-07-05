@@ -53,6 +53,7 @@ Worker → **Settings → Variables**. Use the values from your local `.env.loca
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Plaintext var | Safe to expose |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret (encrypted)** | Bypasses RLS — never plaintext |
 | `LIVE_WEBHOOK_SECRET` | **Secret (encrypted)** | Guards `/api/live/webhook`. Pick a strong value and use the same one in the Google Sheet script. *(Not in `.env.local` yet — create it.)* |
+| `RESEND_API_KEY` | **Secret (encrypted)** | Sends contact-form email notifications via Resend. Optional — form still saves to DB without it. Requires a Resend account + `gsfcbe.com` verified as a sending domain. |
 
 ### 6. Verify on the `*.workers.dev` URL first
 After the first deploy, open the temporary `genesis-trackfest.<subdomain>.workers.dev`
