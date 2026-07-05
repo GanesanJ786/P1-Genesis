@@ -328,6 +328,21 @@ export async function deleteBlogPost(id: string, cover?: string | null) {
 /* Site content (editable copy)                                               */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Live results                                                                */
+/* -------------------------------------------------------------------------- */
+
+export async function clearLiveResults(): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase
+    .from("live_results")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
+  revalidatePath("/live");
+  revalidatePath("/admin/live");
+}
+
 export async function saveContent(
   _prev: ActionResult | null,
   formData: FormData,

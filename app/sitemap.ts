@@ -4,20 +4,21 @@ import { getPublishedEvents, getPublishedBlogPosts } from "@/lib/queries";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
-    "",
-    "/about-event",
-    "/sponsorship",
-    "/foundation",
-    "/team",
-    "/achievements",
-    "/events",
-    "/blog",
-    "/contact",
-  ].map((path) => ({
+    { path: "", freq: "monthly" as const, pri: 1 },
+    { path: "/live", freq: "always" as const, pri: 0.9 },
+    { path: "/about-event", freq: "monthly" as const, pri: 0.7 },
+    { path: "/sponsorship", freq: "monthly" as const, pri: 0.7 },
+    { path: "/foundation", freq: "monthly" as const, pri: 0.7 },
+    { path: "/team", freq: "monthly" as const, pri: 0.7 },
+    { path: "/achievements", freq: "monthly" as const, pri: 0.7 },
+    { path: "/events", freq: "monthly" as const, pri: 0.7 },
+    { path: "/blog", freq: "monthly" as const, pri: 0.7 },
+    { path: "/contact", freq: "monthly" as const, pri: 0.7 },
+  ].map(({ path, freq, pri }) => ({
     url: `${SITE.url}${path}`,
     lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: path === "" ? 1 : 0.7,
+    changeFrequency: freq,
+    priority: pri,
   }));
 
   const [events, posts] = await Promise.all([getPublishedEvents(), getPublishedBlogPosts()]);

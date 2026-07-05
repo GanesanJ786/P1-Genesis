@@ -206,6 +206,38 @@ export interface Database {
         >;
         Relationships: [];
       };
+      live_results: {
+        Row: {
+          id: string;
+          event_key: string;
+          event_name: string;
+          category: string;
+          gender: string | null;
+          event_type: string | null;
+          day: number;
+          sort_order: number;
+          status: "upcoming" | "in_progress" | "completed";
+          results: Json;
+          notes: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_key: string;
+          event_name: string;
+          category: string;
+          gender?: string | null;
+          event_type?: string | null;
+          day?: number;
+          sort_order?: number;
+          status?: "upcoming" | "in_progress" | "completed";
+          results?: Json;
+          notes?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["live_results"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
