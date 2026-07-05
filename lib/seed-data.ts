@@ -308,4 +308,11 @@ export const SITE_CONTENT: Record<string, string> = {
   "foundation.quote": "From two students to five academies and four straight state titles — this is where that story opens to the public.",
   "future.intro": "We are only getting started. Here is where Genesis is headed.",
   "impact.commitment": "Every supporter is not just backing an event — they are investing in the future of Indian athletics. Together, we will build champions and win Olympic medals for India.",
+  "hero.mode": "default",
+  "hero.results_eyebrow": "Thank You, Coimbatore",
+  "hero.results_title": "Genesis Track Fest 2026 — Complete",
+  "hero.results_body":
+    "A landmark two days at Nehru Stadium. Thank you to every athlete, coach, official, sponsor, and supporter who made the inaugural Genesis Track Fest possible. Results and highlights are below.",
+  "hero.results_cta_label": "View Results",
+  "hero.results_cta_href": "/blog",
 };

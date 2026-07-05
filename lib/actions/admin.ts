@@ -11,6 +11,7 @@ import {
   slideSchema,
   sponsorSchema,
   teamMemberSchema,
+  blogPostSchema,
 } from "@/lib/validations";
 import { slugify } from "@/lib/utils";
 import { parseMediaLinks } from "@/lib/events";
@@ -260,6 +261,67 @@ export async function deleteTeamMember(id: string, photo?: string | null) {
   await removeMedia(photo);
   revalidatePublic(["/", "/team"]);
   revalidatePath("/admin/team");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Blog posts                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function saveBlogPost(
+  id: string | null,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const profile = await requireAdmin();
+  const raw = Object.fromEntries(formData) as Record<string, string>;
+
+  const parsed = blogPostSchema.safeParse({
+    ...raw,
+    slug: raw.slug || slugify(raw.title ?? ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message };
+  }
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const publishedAt =
+    d.status === "published"
+      ? id
+        ? undefined
+        : new Date().toISOString()
+      : null;
+
+  const payload = {
+    title: d.title,
+    slug: d.slug,
+    excerpt: d.excerpt || null,
+    body: d.body || null,
+    cover_image: d.cover_image || null,
+    category: d.category,
+    status: d.status,
+    ...(publishedAt !== undefined ? { published_at: publishedAt } : {}),
+  };
+
+  const { error } = id
+    ? await supabase.from("blog_posts").update(payload).eq("id", id)
+    : await supabase
+        .from("blog_posts")
+        .insert({ ...payload, created_by: profile.id, published_at: publishedAt ?? null });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePublic(["/blog", `/blog/${d.slug}`, "/"]);
+  redirect("/admin/blog");
+}
+
+export async function deleteBlogPost(id: string, cover?: string | null) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("blog_posts").delete().eq("id", id);
+  await removeMedia(cover);
+  revalidatePublic(["/blog", "/"]);
+  revalidatePath("/admin/blog");
 }
 
 /* -------------------------------------------------------------------------- */

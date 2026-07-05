@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Trophy } from "lucide-react";
 import { Container, Section } from "@/components/ui/Section";
 import { PageHero } from "@/components/public/PageHero";
@@ -37,6 +38,30 @@ export default function AchievementsPage() {
             ))}
           </div>
         </Container>
+      </Section>
+
+      {/* Kenya Training Camp — Coach Vairavanathan with Eliud Kipchoge, Iten 2025 */}
+      <Section className="py-0">
+        <Reveal>
+          <div className="relative w-full overflow-hidden">
+            <Image
+              src="/achievements/kenya-camp.jpg"
+              alt="Coach Vairavanathan S with marathon world record holder Eliud Kipchoge at Iten, Kenya — Genesis Sports Foundation training camp"
+              width={3024}
+              height={4032}
+              className="w-full object-cover"
+              priority
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-8 py-10">
+              <p className="font-display text-xl uppercase tracking-wide text-cream sm:text-2xl">
+                Iten, Kenya — Meeting the Greatest
+              </p>
+              <p className="mt-1 text-sm uppercase tracking-widest text-sand">
+                Coach Vairavanathan S with Eliud Kipchoge · Genesis Kenya Training Camp
+              </p>
+            </div>
+          </div>
+        </Reveal>
       </Section>
 
       <FeatureBanner className="border-t border-sand/10">

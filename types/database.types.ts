@@ -7,6 +7,8 @@
 export type UserRole = "admin" | "staff" | "coach";
 export type EventStatus = "draft" | "published" | "archived";
 export type SponsorTier = "title" | "platinum" | "gold" | "silver" | "supporter";
+export type BlogCategory = "news" | "results" | "stories" | "training";
+export type BlogStatus = "draft" | "published";
 export type Json =
   | string
   | number
@@ -151,6 +153,36 @@ export interface Database {
         Row: { key: string; value: Json; updated_at: string };
         Insert: { key: string; value: Json };
         Update: { key?: string; value?: Json };
+        Relationships: [];
+      };
+      blog_posts: {
+        Row: {
+          id: string;
+          slug: string;
+          title: string;
+          excerpt: string | null;
+          body: string | null;
+          cover_image: string | null;
+          category: BlogCategory;
+          status: BlogStatus;
+          published_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          excerpt?: string | null;
+          body?: string | null;
+          cover_image?: string | null;
+          category?: BlogCategory;
+          status?: BlogStatus;
+          published_at?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["blog_posts"]["Insert"]>;
         Relationships: [];
       };
       contact_submissions: {

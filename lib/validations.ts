@@ -57,6 +57,20 @@ export const teamMemberSchema = z.object({
 });
 export type TeamMemberInput = z.infer<typeof teamMemberSchema>;
 
+export const blogPostSchema = z.object({
+  title: z.string().min(2, "Title is required").max(160),
+  slug: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens only"),
+  excerpt: z.string().max(400).optional().or(z.literal("")),
+  body: z.string().max(12000).optional().or(z.literal("")),
+  cover_image: z.string().optional().or(z.literal("")),
+  category: z.enum(["news", "results", "stories", "training"]).default("news"),
+  status: z.enum(["draft", "published"]).default("draft"),
+});
+export type BlogPostInput = z.infer<typeof blogPostSchema>;
+
 export const contactSchema = z.object({
   name: z.string().min(2, "Please enter your name").max(120),
   email: z.string().email("Enter a valid email"),

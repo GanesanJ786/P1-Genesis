@@ -75,6 +75,43 @@ export async function getTeam(): Promise<TeamMember[]> {
   return data as TeamMember[];
 }
 
+export type BlogPost = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  body: string | null;
+  cover_image: string | null;
+  category: string;
+  status: "draft" | "published";
+  published_at: string | null;
+  created_at: string;
+};
+
+export async function getPublishedBlogPosts(): Promise<BlogPost[]> {
+  if (!isSupabaseConfigured) return [];
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+  if (error || !data) return [];
+  return data as BlogPost[];
+}
+
+export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
+  if (!isSupabaseConfigured) return null;
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
+  return (data as BlogPost) ?? null;
+}
+
 /** Editable copy by key, falling back to the seeded default. */
 export async function getContent(key: string): Promise<string> {
   if (!isSupabaseConfigured) return SITE_CONTENT[key] ?? "";

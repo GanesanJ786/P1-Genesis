@@ -10,6 +10,7 @@ import {
   Handshake,
   Users,
   FileText,
+  NotebookPen,
   ExternalLink,
   LogOut,
   GraduationCap,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/events", label: "Events", icon: CalendarDays },
+  { href: "/admin/blog", label: "Blog", icon: NotebookPen },
   { href: "/admin/slides", label: "Slides", icon: Images },
   { href: "/admin/sponsors", label: "Sponsors", icon: Handshake },
   { href: "/admin/team", label: "Team", icon: Users },

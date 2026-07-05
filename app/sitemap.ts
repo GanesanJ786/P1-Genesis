@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { SITE } from "@/lib/constants";
-import { getPublishedEvents } from "@/lib/queries";
+import { getPublishedEvents, getPublishedBlogPosts } from "@/lib/queries";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
@@ -11,6 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/team",
     "/achievements",
     "/events",
+    "/blog",
     "/contact",
   ].map((path) => ({
     url: `${SITE.url}${path}`,
@@ -19,7 +20,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "" ? 1 : 0.7,
   }));
 
-  const events = await getPublishedEvents();
+  const [events, posts] = await Promise.all([getPublishedEvents(), getPublishedBlogPosts()]);
+
   const eventRoutes = events.map((e) => ({
     url: `${SITE.url}/events/${e.slug}`,
     lastModified: new Date(e.start_date ?? Date.now()),
@@ -27,5 +29,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...eventRoutes];
+  const blogRoutes = posts.map((p) => ({
+    url: `${SITE.url}/blog/${p.slug}`,
+    lastModified: new Date(p.published_at ?? p.created_at),
+    changeFrequency: "weekly" as const,
+    priority: 0.6,
+  }));
+
+  return [...staticRoutes, ...eventRoutes, ...blogRoutes];
 }

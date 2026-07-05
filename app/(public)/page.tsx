@@ -6,6 +6,7 @@ import { SPONSOR_AUDIENCES } from "@/lib/constants";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import { ButtonLink } from "@/components/ui/Button";
 import { Hero } from "@/components/public/Hero";
+import { HeroResults } from "@/components/public/HeroResults";
 import { StatCounter } from "@/components/public/StatCounter";
 import { EventCard } from "@/components/public/EventCard";
 import { Initiatives } from "@/components/public/Initiatives";
@@ -18,31 +19,51 @@ import { Reveal } from "@/components/public/Reveal";
 export const revalidate = 3600;
 
 export default async function HomePage() {
-  const [events, team, heroEyebrow, heroTitle, heroTagline, purpose, quote, futureIntro, commitment] =
-    await Promise.all([
-      getPublishedEvents(),
-      getTeam(),
-      getContent("hero.eyebrow"),
-      getContent("hero.title"),
-      getContent("hero.tagline"),
-      getContent("foundation.purpose"),
-      getContent("foundation.quote"),
-      getContent("future.intro"),
-      getContent("impact.commitment"),
-    ]);
+  const [
+    events, team,
+    heroMode, heroEyebrow, heroTitle, heroTagline,
+    resultsEyebrow, resultsTitle, resultsBody, resultsCtaLabel, resultsCtaHref,
+    purpose, quote, futureIntro, commitment,
+  ] = await Promise.all([
+    getPublishedEvents(),
+    getTeam(),
+    getContent("hero.mode"),
+    getContent("hero.eyebrow"),
+    getContent("hero.title"),
+    getContent("hero.tagline"),
+    getContent("hero.results_eyebrow"),
+    getContent("hero.results_title"),
+    getContent("hero.results_body"),
+    getContent("hero.results_cta_label"),
+    getContent("hero.results_cta_href"),
+    getContent("foundation.purpose"),
+    getContent("foundation.quote"),
+    getContent("future.intro"),
+    getContent("impact.commitment"),
+  ]);
 
   const { upcoming, past } = splitEvents(events);
 
   return (
     <>
-      <Hero
-        eyebrow={heroEyebrow || "Genesis Sports Foundation · Coimbatore"}
-        title={heroTitle || "The Beginning of Sports"}
-        tagline={
-          heroTagline ||
-          "A decade building champions — accessible athletics coaching that turns grassroots talent into national and international medal winners."
-        }
-      />
+      {heroMode === "post_event" ? (
+        <HeroResults
+          eyebrow={resultsEyebrow || "Thank You, Coimbatore"}
+          title={resultsTitle || "Genesis Track Fest 2026 — Complete"}
+          body={resultsBody || "Thank you to every athlete, coach, and supporter."}
+          ctaLabel={resultsCtaLabel || "View Results"}
+          ctaHref={resultsCtaHref || "/blog"}
+        />
+      ) : heroMode === "hidden" ? null : (
+        <Hero
+          eyebrow={heroEyebrow || "Genesis Sports Foundation · Coimbatore"}
+          title={heroTitle || "The Beginning of Sports"}
+          tagline={
+            heroTagline ||
+            "A decade building champions — accessible athletics coaching that turns grassroots talent into national and international medal winners."
+          }
+        />
+      )}
 
       {/* Purpose / Who we are */}
       <Section>

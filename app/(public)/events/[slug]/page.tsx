@@ -6,10 +6,12 @@ import { CalendarDays, MapPin, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Container, Section } from "@/components/ui/Section";
 import { ButtonLink } from "@/components/ui/Button";
 import { MediaGallery } from "@/components/public/MediaGallery";
+import { JsonLd } from "@/components/ui/JsonLd";
 import { getEventBySlug, getPublishedEvents } from "@/lib/queries";
 import { isPastEvent } from "@/lib/events";
 import { mediaUrl } from "@/lib/storage";
 import { formatDateRange } from "@/lib/utils";
+import { SITE } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -45,8 +47,38 @@ export default async function EventDetailPage({
   const img = mediaUrl(event.cover_image);
   const past = isPastEvent(event);
 
+  const eventSchema = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    name: event.title,
+    description: event.summary ?? undefined,
+    startDate: event.start_date ?? undefined,
+    endDate: event.end_date ?? event.start_date ?? undefined,
+    location: {
+      "@type": "Place",
+      name: event.location ?? SITE.venue,
+      address: { "@type": "PostalAddress", addressLocality: "Coimbatore", addressCountry: "IN" },
+    },
+    organizer: { "@type": "Organization", name: SITE.organiser, url: SITE.url },
+    url: `${SITE.url}/events/${event.slug}`,
+    ...(img ? { image: img } : {}),
+  };
+
   return (
     <article>
+      <JsonLd data={eventSchema} />
+      {/* Breadcrumb */}
+      <div className="border-b border-sand/10 bg-ink-soft/40">
+        <Container className="py-4">
+          <nav aria-label="breadcrumb" className="flex items-center gap-2 text-xs text-sand">
+            <Link href="/" className="hover:text-cream">Home</Link>
+            <span aria-hidden>›</span>
+            <Link href="/events" className="hover:text-cream">Events</Link>
+            <span aria-hidden>›</span>
+            <span className="text-cream">{event.title}</span>
+          </nav>
+        </Container>
+      </div>
       <section className="relative h-[52vh] min-h-[360px] overflow-hidden">
         {img ? (
           <Image

@@ -3,6 +3,22 @@ import type { Database } from "@/types/database.types";
 
 type Tables = Database["public"]["Tables"];
 
+export async function listBlogPosts(): Promise<Tables["blog_posts"]["Row"][]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
+
+export async function getBlogPost(id: string): Promise<Tables["blog_posts"]["Row"] | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("blog_posts").select("*").eq("id", id).single();
+  return data ?? null;
+}
+
 /**
  * Admin-side reads. These run under the logged-in staff session, so RLS returns
  * ALL rows (including drafts / inactive) — unlike the public queries.
