@@ -4,6 +4,11 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-25",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Preserve dashboard-set variables & secrets (RESEND_API_KEY,
+  // LIVE_WEBHOOK_SECRET, SUPABASE_SERVICE_ROLE_KEY, …) across `wrangler deploy`.
+  // Without this, each CI deploy deletes any binding not declared here, which
+  // silently broke the webhook and contact-form email after every push.
+  "keep_vars": true,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
