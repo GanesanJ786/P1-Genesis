@@ -21,8 +21,9 @@ export async function createClient() {
             cookieStore.set(name, value, options),
           );
         } catch {
-          // setAll can be called from a Server Component where mutation is not
-          // allowed; the middleware refreshes the session, so this is safe.
+          // setAll can be called from a Server Component, where cookie mutation
+          // is not allowed. Server Actions and the browser client (autoRefresh)
+          // persist refreshed tokens instead, so swallowing this is safe.
         }
       },
     },

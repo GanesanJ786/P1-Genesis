@@ -6,7 +6,7 @@ export const SITE = {
   tagline: "Run · Jump · Throw · Grow",
   description:
     "Coimbatore's 1st Junior & Senior Athletic Championship. Nehru Stadium, 31 July & 1 August 2026. Organised by Genesis Sports Foundation.",
-  url: "https://genesistrackfest.com",
+  url: "https://gsfcbe.com",
   organiser: "Genesis Sports Foundation",
   venue: "Nehru Stadium, Coimbatore",
   dates: "31 July & 1 Aug 2026",

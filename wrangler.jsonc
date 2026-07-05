@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "genesis-trackfest",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-25",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference binding used by OpenNext for on-demand revalidation
+      // (revalidatePath). The service name MUST match "name" above.
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "genesis-trackfest"
+    }
+  ],
+  "r2_buckets": [
+    {
+      // Incremental cache for ISR + revalidatePath. Create this bucket in the
+      // Cloudflare dashboard (R2) before the first deploy:
+      //   name = genesis-trackfest-cache
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "genesis-trackfest-cache"
+    }
+  ]
+}

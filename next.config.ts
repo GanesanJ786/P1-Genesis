@@ -14,6 +14,12 @@ const supabaseHost = (() => {
 
 const nextConfig: NextConfig = {
   images: {
+    // Cloudflare Workers has no built-in Vercel image optimizer, and Cloudflare
+    // Images is a paid product. Images are already served as compressed WebP from
+    // Supabase Storage, so we skip re-optimization and stay on the free tier while
+    // keeping next/image's layout/lazy-loading benefits. remotePatterns is retained
+    // so the URLs still validate.
+    unoptimized: true,
     remotePatterns: [
       ...(supabaseHost
         ? [

@@ -14,8 +14,9 @@ export default async function AdminLayout({
 }) {
   const profile = await getSessionProfile();
 
-  // Signed out (or Supabase not configured): render the page bare. Middleware
-  // ensures only /admin/login reaches here unauthenticated.
+  // Signed out (or Supabase not configured): render the page bare. Every admin
+  // page calls requireAdmin(), which redirects unauthenticated visitors to
+  // /admin/login — so only the login page renders in this branch.
   if (!profile) {
     return <div className="min-h-screen bg-ink">{children}</div>;
   }
