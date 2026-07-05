@@ -60,7 +60,9 @@ export default async function AdminLivePage() {
               <tr>
                 <th className="px-5 py-3 font-medium">Event</th>
                 <th className="px-5 py-3 font-medium">Day</th>
+                <th className="px-5 py-3 font-medium">Heat</th>
                 <th className="px-5 py-3 font-medium">Category</th>
+                <th className="px-5 py-3 font-medium">Finishers</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Last Updated</th>
               </tr>
@@ -73,7 +75,11 @@ export default async function AdminLivePage() {
                     <p className="text-xs text-sand">{r.event_key}</p>
                   </td>
                   <td className="px-5 py-4 text-sand">Day {r.day}</td>
+                  <td className="px-5 py-4 text-sand">{r.heat_label ?? "Final"}</td>
                   <td className="px-5 py-4 text-sand">{r.category}{r.gender ? ` · ${r.gender}` : ""}</td>
+                  <td className="px-5 py-4 text-sand">
+                    {Array.isArray(r.results) ? r.results.length : 0}
+                  </td>
                   <td className="px-5 py-4">
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[r.status] ?? STATUS_STYLES.upcoming}`}>
                       {r.status === "in_progress" ? "Live" : r.status}

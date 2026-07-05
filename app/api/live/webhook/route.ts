@@ -15,6 +15,7 @@ type LiveResultPayload = {
   category: string;
   gender?: string | null;
   event_type?: string | null;
+  heat_label?: string | null;
   day?: number;
   sort_order?: number;
   status?: "upcoming" | "in_progress" | "completed";
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       category: r.category,
       gender: r.gender ?? null,
       event_type: r.event_type ?? null,
+      heat_label: r.heat_label ?? null,
       day: r.day ?? 1,
       sort_order: r.sort_order ?? 0,
       status: r.status ?? "upcoming",

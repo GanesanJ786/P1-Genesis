@@ -214,6 +214,7 @@ export interface Database {
           category: string;
           gender: string | null;
           event_type: string | null;
+          heat_label: string | null;
           day: number;
           sort_order: number;
           status: "upcoming" | "in_progress" | "completed";
@@ -228,6 +229,7 @@ export interface Database {
           category: string;
           gender?: string | null;
           event_type?: string | null;
+          heat_label?: string | null;
           day?: number;
           sort_order?: number;
           status?: "upcoming" | "in_progress" | "completed";

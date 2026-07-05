@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ResultCard } from "@/components/public/ResultCard";
 import type { Database } from "@/types/database.types";
 
 type LiveResult = Database["public"]["Tables"]["live_results"]["Row"];
-
 type Props = { initialData: LiveResult[] };
 
 function upsertById(prev: LiveResult[], next: LiveResult): LiveResult[] {
@@ -19,12 +18,58 @@ function upsertById(prev: LiveResult[], next: LiveResult): LiveResult[] {
   return [...prev, next];
 }
 
+function FilterChips({
+  label,
+  options,
+  active,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  active: string | null;
+  onSelect: (v: string | null) => void;
+}) {
+  if (options.length < 2) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[0.65rem] uppercase tracking-widest text-sand/60">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => onSelect(null)}
+          className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-colors ${
+            active === null
+              ? "bg-ember text-white"
+              : "bg-ink text-sand hover:text-cream"
+          }`}
+        >
+          All
+        </button>
+        {options.map((o) => (
+          <button
+            key={o}
+            onClick={() => onSelect(active === o ? null : o)}
+            className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-colors ${
+              active === o
+                ? "bg-ember text-white"
+                : "bg-ink text-sand hover:text-cream"
+            }`}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LiveResultsBoard({ initialData }: Props) {
   const [results, setResults] = useState<LiveResult[]>(initialData);
   const [activeDay, setActiveDay] = useState(1);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeDiscipline, setActiveDiscipline] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  /* ── Supabase Realtime subscription ─────────────────────────────────── */
+  /* ── Supabase Realtime ─────────────────────────────────────────────────── */
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -42,38 +87,79 @@ export function LiveResultsBoard({ initialData }: Props) {
         },
       )
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  /* ── Polling fallback — handles viewers beyond 200-connection limit ── */
+  /* ── Polling fallback — handles viewers beyond 200-connection limit ─────── */
   useEffect(() => {
     const id = setInterval(async () => {
       try {
         const res = await fetch("/api/live");
         if (res.ok) {
-          const data: LiveResult[] = await res.json();
-          setResults(data);
+          setResults(await res.json());
           setLastUpdated(new Date());
         }
-      } catch {
-        // silent — polling is best-effort
-      }
+      } catch { /* silent */ }
     }, 10_000);
     return () => clearInterval(id);
   }, []);
 
-  const days = Array.from(new Set(results.map((r) => r.day))).sort();
-  const dayResults = results
-    .filter((r) => r.day === activeDay)
-    .sort((a, b) => a.sort_order - b.sort_order);
+  /* ── Derived data ─────────────────────────────────────────────────────── */
+  const days = useMemo(
+    () => Array.from(new Set(results.map((r) => r.day))).sort(),
+    [results],
+  );
 
-  const running = dayResults.filter((r) => r.status === "in_progress");
-  const completed = dayResults.filter((r) => r.status === "completed");
-  const upcoming = dayResults.filter((r) => r.status === "upcoming");
+  const dayAll = useMemo(
+    () =>
+      results
+        .filter((r) => r.day === activeDay)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [results, activeDay],
+  );
 
+  const categories = useMemo(
+    () =>
+      Array.from(new Set(dayAll.map((r) => r.category).filter(Boolean))).sort(),
+    [dayAll],
+  );
+
+  // Disciplines update when category changes so they stay relevant
+  const disciplines = useMemo(() => {
+    const pool = activeCategory
+      ? dayAll.filter((r) => r.category === activeCategory)
+      : dayAll;
+    return Array.from(
+      new Set(pool.map((r) => r.event_type).filter(Boolean)),
+    ).sort() as string[];
+  }, [dayAll, activeCategory]);
+
+  const handleCategoryChange = (cat: string | null) => {
+    setActiveCategory(cat);
+    setActiveDiscipline(null); // reset discipline when category changes
+  };
+
+  const filtered = useMemo(
+    () =>
+      dayAll.filter((r) => {
+        if (activeCategory && r.category !== activeCategory) return false;
+        if (activeDiscipline && r.event_type !== activeDiscipline) return false;
+        return true;
+      }),
+    [dayAll, activeCategory, activeDiscipline],
+  );
+
+  // "Now Running" always shows across all days so parents never miss a live event
+  const allRunning = useMemo(
+    () =>
+      results
+        .filter((r) => r.status === "in_progress")
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [results],
+  );
+
+  const completed = filtered.filter((r) => r.status === "completed");
+  const upcoming = filtered.filter((r) => r.status === "upcoming");
   const hasAnyData = results.length > 0;
 
   return (
@@ -90,52 +176,77 @@ export function LiveResultsBoard({ initialData }: Props) {
           </span>
         </div>
         <span className="text-xs text-sand">
-          Updated {lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          Updated{" "}
+          {lastUpdated.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
         </span>
       </div>
-
-      {/* Day tabs */}
-      {days.length > 1 ? (
-        <div className="flex gap-2">
-          {days.map((d) => (
-            <button
-              key={d}
-              onClick={() => setActiveDay(d)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${
-                activeDay === d
-                  ? "bg-ember text-white"
-                  : "bg-ink-soft text-sand hover:text-cream"
-              }`}
-            >
-              Day {d}
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       {!hasAnyData ? (
         <div className="rounded-2xl border border-sand/10 bg-ink-soft px-6 py-12 text-center">
           <p className="text-lg text-sand">Results will appear here once the event begins.</p>
-          <p className="mt-2 text-sm text-sand/60">This page updates automatically — no refresh needed.</p>
+          <p className="mt-2 text-sm text-sand/60">
+            This page updates automatically — no refresh needed.
+          </p>
         </div>
       ) : (
         <>
-          {/* Now Running */}
-          {running.length > 0 ? (
+          {/* Now Running — pinned above filters so parents never miss a live event */}
+          {allRunning.length > 0 ? (
             <section>
               <p className="eyebrow mb-4 flex items-center gap-2">
-                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
                 Now Running
               </p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {running.map((r) => (
+                {allRunning.map((r) => (
                   <ResultCard key={r.id} result={r} />
                 ))}
               </div>
             </section>
           ) : null}
 
-          {/* Completed */}
+          {/* Day tabs */}
+          {days.length > 1 ? (
+            <div className="flex gap-2">
+              {days.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setActiveDay(d)}
+                  className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${
+                    activeDay === d
+                      ? "bg-ember text-white"
+                      : "bg-ink-soft text-sand hover:text-cream"
+                  }`}
+                >
+                  Day {d}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Filter bar — only shown when there's something to filter */}
+          {(categories.length > 1 || disciplines.length > 1) ? (
+            <div className="space-y-4 rounded-2xl border border-sand/10 bg-ink-soft p-5">
+              <FilterChips
+                label="Age Group"
+                options={categories}
+                active={activeCategory}
+                onSelect={handleCategoryChange}
+              />
+              <FilterChips
+                label="Discipline"
+                options={disciplines}
+                active={activeDiscipline}
+                onSelect={setActiveDiscipline}
+              />
+            </div>
+          ) : null}
+
+          {/* Completed results */}
           {completed.length > 0 ? (
             <section>
               <p className="eyebrow mb-4">✓ Completed</p>
@@ -157,6 +268,12 @@ export function LiveResultsBoard({ initialData }: Props) {
                 ))}
               </div>
             </section>
+          ) : null}
+
+          {filtered.length === 0 && allRunning.length === 0 ? (
+            <p className="text-center text-sm text-sand">
+              No events match the selected filters.
+            </p>
           ) : null}
         </>
       )}
