@@ -72,15 +72,15 @@ export default async function BlogPostPage({
   return (
     <>
       <JsonLd data={postSchema} />
-      {/* Breadcrumb */}
-      <div className="border-b border-sand/10 bg-ink-soft/40">
-        <Container className="py-4">
-          <nav aria-label="breadcrumb" className="flex items-center gap-2 text-xs text-sand">
-            <Link href="/" className="hover:text-cream">Home</Link>
-            <span aria-hidden>›</span>
-            <Link href="/blog" className="hover:text-cream">Blog</Link>
-            <span aria-hidden>›</span>
-            <span className="text-cream">{post.title}</span>
+      {/* Breadcrumb — pt-20/24 clears the fixed navbar */}
+      <div className="border-b border-sand/10 bg-ink pt-20 sm:pt-24">
+        <Container className="pb-3">
+          <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-sand">
+            <Link href="/" className="shrink-0 hover:text-ember transition-colors">Home</Link>
+            <span aria-hidden className="shrink-0 text-sand/40">›</span>
+            <Link href="/blog" className="shrink-0 hover:text-ember transition-colors">Blog</Link>
+            <span aria-hidden className="shrink-0 text-sand/40">›</span>
+            <span className="truncate text-cream/80">{post.title}</span>
           </nav>
         </Container>
       </div>
