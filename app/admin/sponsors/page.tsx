@@ -5,7 +5,6 @@ import { listSponsors } from "@/lib/admin-queries";
 import { deleteSponsor } from "@/lib/actions/admin";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { DeleteButton } from "@/components/admin/DeleteButton";
-import { formatINR } from "@/lib/utils";
 
 export default async function AdminSponsorsPage() {
   await requireAdmin();
@@ -28,7 +27,6 @@ export default async function AdminSponsorsPage() {
               <tr>
                 <th className="px-5 py-3 font-medium">Name</th>
                 <th className="px-5 py-3 font-medium">Tier</th>
-                <th className="px-5 py-3 font-medium">Amount</th>
                 <th className="px-5 py-3 font-medium">Active</th>
                 <th className="px-5 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -38,7 +36,6 @@ export default async function AdminSponsorsPage() {
                 <tr key={s.id} className="border-t border-white/5">
                   <td className="px-5 py-4 font-medium text-cream">{s.name}</td>
                   <td className="px-5 py-4 capitalize text-sand">{s.tier}</td>
-                  <td className="px-5 py-4 text-sand">{formatINR(s.amount_inr) || "—"}</td>
                   <td className="px-5 py-4 text-sand">{s.is_active ? "Yes" : "No"}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-2">
