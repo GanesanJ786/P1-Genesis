@@ -22,6 +22,17 @@ export function formatINR(amount: number | null | undefined): string {
   return "₹" + amount.toLocaleString("en-IN");
 }
 
+/**
+ * Grid classes for a row of cards (events/blog posts) that stays balanced
+ * regardless of count — a lone card centered instead of stranded in the
+ * first column of a 3-col grid with empty space beside it.
+ */
+export function cardGridClass(count: number): string {
+  if (count <= 1) return "grid max-w-sm mx-auto";
+  if (count === 2) return "grid gap-6 sm:grid-cols-2 max-w-3xl mx-auto";
+  return "grid gap-6 sm:grid-cols-2 lg:grid-cols-3";
+}
+
 /** Format an event date range like "31 Jul – 1 Aug 2026". */
 export function formatDateRange(
   start?: string | null,

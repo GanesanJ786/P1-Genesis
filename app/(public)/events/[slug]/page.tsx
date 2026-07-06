@@ -6,6 +6,7 @@ import { CalendarDays, MapPin, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Container, Section } from "@/components/ui/Section";
 import { ButtonLink } from "@/components/ui/Button";
 import { MediaGallery } from "@/components/public/MediaGallery";
+import { RegisterButton } from "@/components/public/RegisterButton";
 import { JsonLd } from "@/components/ui/JsonLd";
 import { getEventBySlug, getPublishedEvents } from "@/lib/queries";
 import { isPastEvent } from "@/lib/events";
@@ -157,15 +158,11 @@ export default async function EventDetailPage({
 
           <div className="mt-12 flex flex-wrap gap-4 border-t border-sand/15 pt-8">
             {!past && event.registration_url ? (
-              <ButtonLink
-                href={event.registration_url}
-                external
-                target="_blank"
-                rel="noopener noreferrer"
+              <RegisterButton
+                url={event.registration_url}
                 size="lg"
-              >
-                Register for this Event
-              </ButtonLink>
+                label="Register for this Event"
+              />
             ) : (
               <ButtonLink href="/events" size="lg">
                 See Upcoming Events

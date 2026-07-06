@@ -5,6 +5,7 @@ import { BlogCard } from "@/components/public/BlogCard";
 import { getPublishedBlogPosts } from "@/lib/queries";
 import { Reveal } from "@/components/public/Reveal";
 import { SITE } from "@/lib/constants";
+import { cardGridClass } from "@/lib/utils";
 
 export const revalidate = 3600;
 
@@ -54,7 +55,7 @@ export default async function BlogPage() {
           {posts.length === 0 ? (
             <p className="text-sand">No posts yet — check back soon.</p>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={cardGridClass(posts.length)}>
               {posts.map((post, i) => (
                 <Reveal key={post.id} delay={(i % 3) * 0.06}>
                   <BlogCard post={post} />

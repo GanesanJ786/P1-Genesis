@@ -10,7 +10,7 @@ import {
 import type { EventItem } from "@/lib/seed-data";
 import { mediaUrl } from "@/lib/storage";
 import { formatDateRange } from "@/lib/utils";
-import { ButtonLink } from "@/components/ui/Button";
+import { RegisterButton } from "@/components/public/RegisterButton";
 
 /**
  * Shared event card for the homepage and the events listing.
@@ -95,15 +95,7 @@ export function EventCard({
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           {!past && event.registration_url ? (
-            <ButtonLink
-              href={event.registration_url}
-              external
-              target="_blank"
-              rel="noopener noreferrer"
-              size="sm"
-            >
-              Register
-            </ButtonLink>
+            <RegisterButton url={event.registration_url} size="sm" />
           ) : null}
           <Link
             href={`/events/${event.slug}`}

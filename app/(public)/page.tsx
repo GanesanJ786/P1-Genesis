@@ -3,6 +3,7 @@ import { getContent, getPublishedEvents, getTeam } from "@/lib/queries";
 import { splitEvents } from "@/lib/events";
 import { FOUNDATION_STATS } from "@/lib/seed-data";
 import { SPONSOR_AUDIENCES } from "@/lib/constants";
+import { cardGridClass } from "@/lib/utils";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import { ButtonLink } from "@/components/ui/Button";
 import { Hero } from "@/components/public/Hero";
@@ -131,7 +132,7 @@ export default async function HomePage() {
           {upcoming.length === 0 ? (
             <p className="text-sand">New events are being finalised — check back soon.</p>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={cardGridClass(Math.min(upcoming.length, 3))}>
               {upcoming.slice(0, 3).map((event, i) => (
                 <Reveal key={event.id} delay={(i % 3) * 0.06}>
                   <EventCard event={event} />
@@ -152,7 +153,7 @@ export default async function HomePage() {
         <Section className="bg-ink-soft/40">
           <Container>
             <SectionHeading eyebrow="Our Track Record" title="Successful Events" />
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={cardGridClass(Math.min(past.length, 3))}>
               {past.slice(0, 3).map((event, i) => (
                 <Reveal key={event.id} delay={(i % 3) * 0.06}>
                   <EventCard event={event} past />

@@ -5,6 +5,7 @@ import { Reveal } from "@/components/public/Reveal";
 import { EventCard } from "@/components/public/EventCard";
 import { getPublishedEvents } from "@/lib/queries";
 import { splitEvents } from "@/lib/events";
+import { cardGridClass } from "@/lib/utils";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -36,7 +37,7 @@ export default async function EventsPage() {
               New events are being finalised — check back soon.
             </p>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={cardGridClass(upcoming.length)}>
               {upcoming.map((event, i) => (
                 <Reveal key={event.id} delay={(i % 3) * 0.06}>
                   <EventCard event={event} />
@@ -54,7 +55,7 @@ export default async function EventsPage() {
               eyebrow="Our Track Record"
               title="Successful Events"
             />
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={cardGridClass(past.length)}>
               {past.map((event, i) => (
                 <Reveal key={event.id} delay={(i % 3) * 0.06}>
                   <EventCard event={event} past />
