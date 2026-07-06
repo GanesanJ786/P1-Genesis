@@ -29,5 +29,27 @@
       "binding": "NEXT_INC_CACHE_R2_BUCKET",
       "bucket_name": "genesis-trackfest-cache"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        // Tag cache backing on-demand revalidatePath/revalidateTag — without
+        // this, revalidation is a silent no-op and admin edits never bust the
+        // R2 incremental cache above.
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache"
+      },
+      {
+        // Background queue for stale-while-revalidate regeneration.
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOShardedTagCache", "DOQueueHandler"]
+    }
   ]
 }
