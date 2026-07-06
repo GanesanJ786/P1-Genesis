@@ -3,7 +3,6 @@ import { Mail, Phone, MapPin } from "lucide-react";
 import { Container, Section } from "@/components/ui/Section";
 import { PageHero } from "@/components/public/PageHero";
 import { ContactForm } from "@/components/public/ContactForm";
-import { RegistrationQR } from "@/components/public/RegistrationQR";
 import { CONTACT } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
@@ -78,8 +77,6 @@ export default function ContactPage() {
                   </div>
                 </div>
               </div>
-
-              <RegistrationQR />
             </div>
           </div>
         </Container>

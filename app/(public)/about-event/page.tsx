@@ -5,7 +5,6 @@ import { PageHero } from "@/components/public/PageHero";
 import { StatCounter } from "@/components/public/StatCounter";
 import { Reveal } from "@/components/public/Reveal";
 import { ButtonLink } from "@/components/ui/Button";
-import { RegistrationQR } from "@/components/public/RegistrationQR";
 import { REACH_STATS, EVENT_CATEGORIES } from "@/lib/seed-data";
 import { SITE } from "@/lib/constants";
 
@@ -36,7 +35,7 @@ export default function AboutEventPage() {
 
       <Section>
         <Container>
-          <div className="grid gap-12 lg:grid-cols-[1.3fr_0.7fr]">
+          <div className="grid gap-12">
             <Reveal>
               <p className="text-lg text-cream">
                 Genesis Track Fest is a professional athletics competition
@@ -78,10 +77,6 @@ export default function AboutEventPage() {
                   </div>
                 ))}
               </div>
-            </Reveal>
-
-            <Reveal delay={0.1}>
-              <RegistrationQR />
             </Reveal>
           </div>
         </Container>

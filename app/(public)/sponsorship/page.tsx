@@ -4,7 +4,7 @@ import { PageHero } from "@/components/public/PageHero";
 import { SponsorTiers } from "@/components/public/SponsorTiers";
 import { Reveal } from "@/components/public/Reveal";
 import { ButtonLink } from "@/components/ui/Button";
-import { BRANDING_TOUCHPOINTS, SPONSOR_AUDIENCES, SITE } from "@/lib/constants";
+import { BRANDING_TOUCHPOINTS, SPONSOR_AUDIENCES } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -83,15 +83,6 @@ export default function SponsorshipPage() {
           <div className="mt-12 flex flex-wrap gap-4">
             <ButtonLink href="/contact" size="lg">
               Discuss a Partnership
-            </ButtonLink>
-            <ButtonLink
-              href={SITE.prospectusPath}
-              external
-              target="_blank"
-              variant="outline"
-              size="lg"
-            >
-              Download Full Prospectus
             </ButtonLink>
           </div>
         </Container>
