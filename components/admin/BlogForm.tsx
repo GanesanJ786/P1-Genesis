@@ -55,6 +55,35 @@ export function BlogForm({ post }: { post?: BlogRow }) {
         <ImageUploader field="cover_image" folder="blog" defaultPath={post?.cover_image} />
       </div>
 
+      {/* SEO — all optional; blank falls back to Title/Excerpt automatically. */}
+      <fieldset className="space-y-5 rounded-xl border border-sand/15 p-5">
+        <legend className="px-2 text-xs font-semibold uppercase tracking-widest text-ember">
+          SEO (optional)
+        </legend>
+        <p className="text-xs text-sand">
+          Leave these blank to auto-use the Title and Excerpt. Fill them in to
+          fine-tune how this post appears in Google and social shares.
+        </p>
+        <TextField
+          label="Meta title — search headline (~60 chars)"
+          name="meta_title"
+          defaultValue={post?.meta_title ?? ""}
+          placeholder="100m Boys Final Results — Genesis Track Fest 2026, Coimbatore"
+        />
+        <TextArea
+          label="Meta description — search snippet (~155 chars)"
+          name="meta_description"
+          rows={2}
+          defaultValue={post?.meta_description ?? ""}
+        />
+        <TextField
+          label="Focus keyword — main phrase you want to rank for"
+          name="focus_keyword"
+          defaultValue={post?.focus_keyword ?? ""}
+          placeholder="athletics results Coimbatore"
+        />
+      </fieldset>
+
       {state?.error ? <p className="text-sm text-ember-bright">{state.error}</p> : null}
       <SubmitButton>{post ? "Update post" : "Create post"}</SubmitButton>
     </form>

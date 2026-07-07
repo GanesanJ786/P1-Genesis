@@ -84,6 +84,9 @@ export type BlogPost = {
   cover_image: string | null;
   category: string;
   status: "draft" | "published";
+  meta_title: string | null;
+  meta_description: string | null;
+  focus_keyword: string | null;
   published_at: string | null;
   created_at: string;
 };

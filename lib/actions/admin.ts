@@ -300,6 +300,9 @@ export async function saveBlogPost(
     cover_image: d.cover_image || null,
     category: d.category,
     status: d.status,
+    meta_title: d.meta_title || null,
+    meta_description: d.meta_description || null,
+    focus_keyword: d.focus_keyword || null,
     ...(publishedAt !== undefined ? { published_at: publishedAt } : {}),
   };
 

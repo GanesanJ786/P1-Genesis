@@ -165,6 +165,9 @@ export interface Database {
           cover_image: string | null;
           category: BlogCategory;
           status: BlogStatus;
+          meta_title: string | null;
+          meta_description: string | null;
+          focus_keyword: string | null;
           published_at: string | null;
           created_by: string | null;
           created_at: string;
@@ -179,6 +182,9 @@ export interface Database {
           cover_image?: string | null;
           category?: BlogCategory;
           status?: BlogStatus;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          focus_keyword?: string | null;
           published_at?: string | null;
           created_by?: string | null;
         };

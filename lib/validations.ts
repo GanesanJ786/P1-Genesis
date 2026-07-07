@@ -68,6 +68,10 @@ export const blogPostSchema = z.object({
   cover_image: z.string().optional().or(z.literal("")),
   category: z.enum(["news", "results", "stories", "training"]).default("news"),
   status: z.enum(["draft", "published"]).default("draft"),
+  // Optional SEO overrides — blank falls back to title/excerpt at render time.
+  meta_title: z.string().max(70).optional().or(z.literal("")),
+  meta_description: z.string().max(160).optional().or(z.literal("")),
+  focus_keyword: z.string().max(80).optional().or(z.literal("")),
 });
 export type BlogPostInput = z.infer<typeof blogPostSchema>;
 

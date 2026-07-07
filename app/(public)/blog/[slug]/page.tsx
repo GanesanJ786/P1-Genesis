@@ -32,11 +32,16 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 };
 
 /**
- * Meta description used by search + social. Prefer the author's excerpt; if
- * they left it blank, derive a ~155-char snippet from the body so every post
- * still ships a description (a missing one hurts click-through and rankings).
+ * Meta description used by search + social. Priority: the author's SEO
+ * override → excerpt → a ~155-char snippet derived from the body, so every
+ * post ships a description (a missing one hurts click-through and rankings).
  */
-function metaDescriptionFor(post: { excerpt: string | null; body: string | null }): string | undefined {
+function metaDescriptionFor(post: {
+  meta_description: string | null;
+  excerpt: string | null;
+  body: string | null;
+}): string | undefined {
+  if (post.meta_description) return post.meta_description;
   if (post.excerpt) return post.excerpt;
   if (!post.body) return undefined;
   const text = post.body.replace(/[#*_>`[\]]/g, "").replace(/\s+/g, " ").trim();
@@ -56,7 +61,9 @@ export async function generateMetadata({
   const canonicalUrl = `${SITE.url}/blog/${post.slug}`;
   const categoryLabel = CATEGORY_LABELS[post.category] ?? post.category;
   const description = metaDescriptionFor(post);
+  const seoTitle = post.meta_title || post.title;
   const keywords = [
+    ...(post.focus_keyword ? [post.focus_keyword] : []),
     ...(CATEGORY_KEYWORDS[post.category] ?? []),
     "Genesis Sports Foundation",
     "Coimbatore athletics",
@@ -64,13 +71,13 @@ export async function generateMetadata({
   ];
 
   return {
-    title: post.title,
+    title: seoTitle,
     description,
     keywords,
     authors: [{ name: SITE.organiser, url: SITE.url }],
     alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: post.title,
+      title: seoTitle,
       description,
       type: "article",
       url: canonicalUrl,
@@ -83,7 +90,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: post.title,
+      title: seoTitle,
       description,
     },
   };
@@ -129,6 +136,7 @@ export default async function BlogPostPage({
     description,
     articleSection: CATEGORY_LABELS[post.category] ?? post.category,
     keywords: [
+      ...(post.focus_keyword ? [post.focus_keyword] : []),
       ...(CATEGORY_KEYWORDS[post.category] ?? []),
       "Genesis Sports Foundation",
       "Coimbatore athletics",
