@@ -69,7 +69,7 @@ function getTicket360Crop(
 /**
  * Register CTA that opens the event's external registration form (Google
  * Form) in an in-site modal instead of navigating away, so visitors don't
- * leave gsfcbe.com.
+ * leave gsfteams.com.
  */
 export function RegisterButton({
   url,

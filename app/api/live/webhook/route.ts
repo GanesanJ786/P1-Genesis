@@ -18,10 +18,22 @@ type LiveResultPayload = {
   heat_label?: string | null;
   day?: number;
   sort_order?: number;
-  status?: "upcoming" | "in_progress" | "completed";
+  status?: string;
   results?: ResultRow[];
   notes?: string | null;
 };
+
+const VALID_STATUSES = ["upcoming", "in_progress", "completed"] as const;
+
+function normalizeStatus(status: unknown): (typeof VALID_STATUSES)[number] {
+  const normalized = String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  return (VALID_STATUSES as readonly string[]).includes(normalized)
+    ? (normalized as (typeof VALID_STATUSES)[number])
+    : "upcoming";
+}
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-webhook-secret");
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
       heat_label: r.heat_label ?? null,
       day: r.day ?? 1,
       sort_order: r.sort_order ?? 0,
-      status: r.status ?? "upcoming",
+      status: normalizeStatus(r.status),
       results: r.results ?? [],
       notes: r.notes ?? null,
       updated_at: new Date().toISOString(),

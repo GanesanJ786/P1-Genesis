@@ -9,7 +9,7 @@ export const SITE = {
   tagline: "Run · Jump · Throw · Grow",
   description:
     "Genesis Sports Foundation — accessible athletics coaching in Coimbatore, turning grassroots talent into national & international medal winners.",
-  url: "https://gsfcbe.com",
+  url: "https://gsfteams.com",
   organiser: "Genesis Sports Foundation",
   venue: "Nehru Stadium, Coimbatore",
   dates: "31 July & 1 Aug 2026",

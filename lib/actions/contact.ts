@@ -18,8 +18,8 @@ const NOTIFY_EMAILS = [
   "gsfcbe15@gmail.com",
 ];
 
-// Must be an address on a domain verified in Resend (gsfcbe.com).
-const MAIL_FROM = "Genesis Sports Foundation <noreply@gsfcbe.com>";
+// Must be an address on a domain verified in Resend (gsfteams.com).
+const MAIL_FROM = "Genesis Sports Foundation <noreply@gsfteams.com>";
 
 function escapeHtml(s: string): string {
   return s
@@ -59,7 +59,7 @@ async function sendContactEmail(data: {
 
   const html = `
     <div style="font-family:system-ui,sans-serif;color:#111">
-      <h2 style="margin:0 0 12px">New enquiry from gsfcbe.com</h2>
+      <h2 style="margin:0 0 12px">New enquiry from gsfteams.com</h2>
       <table style="border-collapse:collapse">${rows}</table>
     </div>`;
 
