@@ -6,47 +6,73 @@ import Autoplay from "embla-carousel-autoplay";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { mediaUrl } from "@/lib/storage";
 import { Container, Section } from "@/components/ui/Section";
+import { ButtonLink } from "@/components/ui/Button";
 import type { Slide } from "@/lib/seed-data";
 
 /**
- * Homepage promotional banner(s) — designed event posters uploaded via
- * Admin → Slides (group "Home hero"). Reuses the existing slides system so
- * swapping in the next event's poster is a content edit, not a code change.
+ * Homepage "featured event" promo — designed posters uploaded via Admin →
+ * Slides (group "Home hero"). Reuses the existing slides system so promoting
+ * the next event is a content edit, not a code change.
  *
- * A finished poster (text/logos baked in) is shown at its natural aspect ratio
- * with `w-full h-auto object-contain`, so it scales down to any screen width
- * without ever cropping the baked-in artwork. One active slide → a single
- * banner; multiple → an auto-advancing, swipeable carousel of upcoming events.
+ * Rather than dumping the raw image full-width (posters are often square/portrait
+ * on a light background, which clashes with the dark site), each slide renders
+ * as a framed promo: the poster contained in a clean card on one side, and the
+ * event title / description / CTA (from the slide's own fields) on the other.
+ * One active slide → a single promo; multiple → an auto-advancing carousel.
  */
-function BannerImage({ slide }: { slide: Slide }) {
+function BannerPromo({ slide }: { slide: Slide }) {
   const img = mediaUrl(slide.image_path);
   if (!img) return null;
 
-  // Plain <img> (not next/image) is deliberate: posters are uploaded at
-  // arbitrary aspect ratios, and next/image needs fixed width/height. Images
-  // are already served unoptimized (next.config), so there's nothing to gain.
-  const picture = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={img}
-      alt={slide.title || "Genesis Sports Foundation event"}
-      className="h-auto w-full object-contain"
-    />
+  const poster = (
+    // A light card frames the (usually white-background) poster so it reads as
+    // an intentional flyer instead of a floating graphic. Plain <img> is
+    // deliberate — posters have arbitrary aspect ratios (images are already
+    // served unoptimized, so next/image adds nothing here).
+    <div className="overflow-hidden rounded-2xl bg-white p-3 shadow-lg shadow-black/20 ring-1 ring-black/5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={img}
+        alt={slide.title || "Genesis Sports Foundation event"}
+        className="mx-auto max-h-[340px] w-full object-contain"
+      />
+    </div>
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-sand/15 bg-ink-soft">
-      {slide.link_url ? (
-        <Link
-          href={slide.link_url}
-          className="block transition-opacity hover:opacity-95"
-          aria-label={slide.title || "View event details"}
-        >
-          {picture}
-        </Link>
-      ) : (
-        picture
-      )}
+    <div className="grid items-center gap-8 overflow-hidden rounded-3xl border border-sand/15 bg-gradient-to-br from-ink-soft to-ink p-6 sm:p-10 lg:grid-cols-2 lg:gap-12">
+      <div className="mx-auto w-full max-w-sm">
+        {slide.link_url ? (
+          <Link
+            href={slide.link_url}
+            className="block transition-opacity hover:opacity-90"
+            aria-label={slide.title || "View event details"}
+          >
+            {poster}
+          </Link>
+        ) : (
+          poster
+        )}
+      </div>
+
+      <div className="text-center lg:text-left">
+        <p className="eyebrow mb-3 text-ember">Featured Event</p>
+        {slide.title ? (
+          <h2 className="font-display text-3xl uppercase leading-tight text-cream sm:text-4xl">
+            {slide.title}
+          </h2>
+        ) : null}
+        {slide.subtitle ? (
+          <p className="mt-4 text-sand">{slide.subtitle}</p>
+        ) : null}
+        {slide.link_url ? (
+          <div className="mt-7">
+            <ButtonLink href={slide.link_url} size="lg">
+              View Event Details
+            </ButtonLink>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -62,7 +88,7 @@ function BannerCarousel({ banners }: { banners: Slide[] }) {
         <div className="flex">
           {banners.map((s) => (
             <div key={s.id} className="min-w-0 flex-[0_0_100%]">
-              <BannerImage slide={s} />
+              <BannerPromo slide={s} />
             </div>
           ))}
         </div>
@@ -70,15 +96,15 @@ function BannerCarousel({ banners }: { banners: Slide[] }) {
 
       <button
         onClick={() => emblaApi?.scrollPrev()}
-        aria-label="Previous banner"
-        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember"
+        aria-label="Previous event"
+        className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember sm:left-4"
       >
         <ArrowLeft size={18} />
       </button>
       <button
         onClick={() => emblaApi?.scrollNext()}
-        aria-label="Next banner"
-        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember"
+        aria-label="Next event"
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember sm:right-4"
       >
         <ArrowRight size={18} />
       </button>
@@ -91,10 +117,10 @@ export function EventBanner({ slides }: { slides: Slide[] }) {
   if (banners.length === 0) return null;
 
   return (
-    <Section className="py-10 sm:py-12">
-      <Container className="max-w-5xl">
+    <Section className="py-12 sm:py-16">
+      <Container>
         {banners.length === 1 ? (
-          <BannerImage slide={banners[0]} />
+          <BannerPromo slide={banners[0]} />
         ) : (
           <BannerCarousel banners={banners} />
         )}
