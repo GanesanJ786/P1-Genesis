@@ -18,6 +18,22 @@ function upsertById(prev: LiveResult[], next: LiveResult): LiveResult[] {
   return [...prev, next];
 }
 
+/**
+ * Reconcile the (edge-cached, up to ~30s stale) polling response with current
+ * state without ever moving a row backwards in time. The polled array is the
+ * authoritative *set* (so deletions still reach clients whose Realtime channel
+ * dropped), but for each row we keep whichever copy has the newer `updated_at`
+ * — otherwise a stale cached poll clobbers a fresher Realtime update and the
+ * value visibly flickers old→new→old.
+ */
+function mergeFresh(prev: LiveResult[], polled: LiveResult[]): LiveResult[] {
+  const prevById = new Map(prev.map((r) => [r.id, r]));
+  return polled.map((row) => {
+    const existing = prevById.get(row.id);
+    return existing && existing.updated_at > row.updated_at ? existing : row;
+  });
+}
+
 function FilterChips({
   label,
   options,
@@ -96,7 +112,8 @@ export function LiveResultsBoard({ initialData }: Props) {
       try {
         const res = await fetch("/api/live");
         if (res.ok) {
-          setResults(await res.json());
+          const polled = (await res.json()) as LiveResult[];
+          setResults((prev) => mergeFresh(prev, polled));
           setLastUpdated(new Date());
         }
       } catch { /* silent */ }
