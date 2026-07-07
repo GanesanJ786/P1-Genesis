@@ -1,5 +1,5 @@
 import { ArrowRight, Sparkles } from "lucide-react";
-import { getContent, getPublishedEvents, getTeam } from "@/lib/queries";
+import { getContent, getPublishedEvents, getTeam, getSlides } from "@/lib/queries";
 import { splitEvents } from "@/lib/events";
 import { FOUNDATION_STATS } from "@/lib/seed-data";
 import { SPONSOR_AUDIENCES } from "@/lib/constants";
@@ -13,6 +13,7 @@ import { EventCard } from "@/components/public/EventCard";
 import { Initiatives } from "@/components/public/Initiatives";
 import { FuturePlans } from "@/components/public/FuturePlans";
 import { FeatureBanner } from "@/components/public/FeatureBanner";
+import { EventBanner } from "@/components/public/EventBanner";
 import { TeamGrid } from "@/components/public/TeamGrid";
 import { Reveal } from "@/components/public/Reveal";
 
@@ -21,13 +22,14 @@ export const revalidate = 3600;
 
 export default async function HomePage() {
   const [
-    events, team,
+    events, team, heroSlides,
     heroMode, heroEyebrow, heroTitle, heroTagline,
     resultsEyebrow, resultsTitle, resultsBody, resultsCtaLabel, resultsCtaHref,
     purpose, quote, futureIntro, commitment,
   ] = await Promise.all([
     getPublishedEvents(),
     getTeam(),
+    getSlides("home_hero"),
     getContent("hero.mode"),
     getContent("hero.eyebrow"),
     getContent("hero.title"),
@@ -65,6 +67,10 @@ export default async function HomePage() {
           }
         />
       )}
+
+      {/* Promotional event banner(s) — uploaded via Admin → Slides (Home hero).
+          Renders nothing until at least one active banner exists. */}
+      <EventBanner slides={heroSlides} />
 
       {/* Purpose / Who we are */}
       <Section>
