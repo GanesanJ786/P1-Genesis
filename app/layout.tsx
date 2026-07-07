@@ -100,8 +100,11 @@ const orgNode = {
   })),
   email: CONTACT.emails[0],
   // Social profiles — links the brand entity to its social presence in Google's
-  // knowledge graph. Add YouTube/Facebook URLs here as they come online.
-  sameAs: ["https://www.instagram.com/gsfteams/"],
+  // knowledge graph. Add Facebook/other URLs here as they come online.
+  sameAs: [
+    "https://www.instagram.com/gsfteams/",
+    "https://www.youtube.com/channel/UCE290WpWD_QQIciL74Bk0vw",
+  ],
 };
 
 const websiteNode = {
