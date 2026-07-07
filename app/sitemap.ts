@@ -13,6 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "/achievements", freq: "monthly" as const, pri: 0.7 },
     { path: "/events", freq: "monthly" as const, pri: 0.7 },
     { path: "/blog", freq: "monthly" as const, pri: 0.7 },
+    { path: "/faq", freq: "monthly" as const, pri: 0.6 },
     { path: "/contact", freq: "monthly" as const, pri: 0.7 },
   ].map(({ path, freq, pri }) => ({
     url: `${SITE.url}${path}`,

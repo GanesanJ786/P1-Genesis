@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { Container, Section } from "@/components/ui/Section";
 import { JsonLd } from "@/components/ui/JsonLd";
+import { BlogCard } from "@/components/public/BlogCard";
 import { getBlogPostBySlug, getPublishedBlogPosts } from "@/lib/queries";
 import { mediaUrl } from "@/lib/storage";
 import { SITE } from "@/lib/constants";
@@ -30,6 +31,19 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   training: ["athletics training Coimbatore", "track and field coaching", "junior athletics coaching Tamil Nadu", "Genesis Sports Foundation training"],
 };
 
+/**
+ * Meta description used by search + social. Prefer the author's excerpt; if
+ * they left it blank, derive a ~155-char snippet from the body so every post
+ * still ships a description (a missing one hurts click-through and rankings).
+ */
+function metaDescriptionFor(post: { excerpt: string | null; body: string | null }): string | undefined {
+  if (post.excerpt) return post.excerpt;
+  if (!post.body) return undefined;
+  const text = post.body.replace(/[#*_>`[\]]/g, "").replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  return text.length > 155 ? `${text.slice(0, 152).trimEnd()}…` : text;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -41,6 +55,7 @@ export async function generateMetadata({
 
   const canonicalUrl = `${SITE.url}/blog/${post.slug}`;
   const categoryLabel = CATEGORY_LABELS[post.category] ?? post.category;
+  const description = metaDescriptionFor(post);
   const keywords = [
     ...(CATEGORY_KEYWORDS[post.category] ?? []),
     "Genesis Sports Foundation",
@@ -50,13 +65,13 @@ export async function generateMetadata({
 
   return {
     title: post.title,
-    description: post.excerpt ?? undefined,
+    description,
     keywords,
     authors: [{ name: SITE.organiser, url: SITE.url }],
     alternates: { canonical: canonicalUrl },
     openGraph: {
       title: post.title,
-      description: post.excerpt ?? undefined,
+      description,
       type: "article",
       url: canonicalUrl,
       siteName: SITE.name,
@@ -69,7 +84,7 @@ export async function generateMetadata({
     twitter: {
       card: "summary_large_image",
       title: post.title,
-      description: post.excerpt ?? undefined,
+      description,
     },
   };
 }
@@ -83,16 +98,35 @@ export default async function BlogPostPage({
   const post = await getBlogPostBySlug(slug);
   if (!post) notFound();
 
+  // Related posts — same category first (most relevant internal links), then
+  // topped up with other recent posts so the section rarely renders empty.
+  // Internal linking helps crawl depth, indexing, and time-on-page.
+  const allPosts = await getPublishedBlogPosts();
+  const sameCategory = allPosts.filter((p) => p.slug !== post.slug && p.category === post.category);
+  const others = allPosts.filter((p) => p.slug !== post.slug && p.category !== post.category);
+  const related = [...sameCategory, ...others].slice(0, 3);
+
   const img = mediaUrl(post.cover_image);
   const canonicalUrl = `${SITE.url}/blog/${post.slug}`;
   const wordCount = post.body ? post.body.split(/\s+/).length : undefined;
+  const description = metaDescriptionFor(post);
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE.url },
+      { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE.url}/blog` },
+      { "@type": "ListItem", position: 3, name: post.title, item: canonicalUrl },
+    ],
+  };
 
   const postSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
     headline: post.title,
-    description: post.excerpt ?? undefined,
+    description,
     articleSection: CATEGORY_LABELS[post.category] ?? post.category,
     keywords: [
       ...(CATEGORY_KEYWORDS[post.category] ?? []),
@@ -124,6 +158,7 @@ export default async function BlogPostPage({
   return (
     <>
       <JsonLd data={postSchema} />
+      <JsonLd data={breadcrumbSchema} />
       {/* Breadcrumb — pt-20/24 clears the fixed navbar */}
       <div className="border-b border-sand/10 bg-ink pt-20 sm:pt-24">
         <Container className="pb-3">
@@ -211,6 +246,18 @@ export default async function BlogPostPage({
             <meta itemProp="publisher" content={SITE.organiser} />
             <link itemProp="url" href={canonicalUrl} />
           </article>
+
+          {/* Related posts — internal links to keep readers on-site */}
+          {related.length > 0 ? (
+            <section className="mt-16 border-t border-sand/10 pt-10">
+              <p className="eyebrow mb-6">More from the blog</p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {related.map((r) => (
+                  <BlogCard key={r.id} post={r} />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {/* Footer nav */}
           <div className="mt-12 border-t border-sand/10 pt-8">

@@ -55,23 +55,66 @@ export const metadata: Metadata = {
   // the app/ directory via Next.js file conventions — no manual `icons` needed.
 };
 
-const orgSchema = {
-  "@context": "https://schema.org",
+// Local-SEO structured data. A @graph lets the Organization and WebSite nodes
+// cross-reference each other by @id so Google links the brand, site, and
+// place. areaServed + Tamil/English languages + geo-scoped address are the
+// signals that help ranking for "athletics coaching Coimbatore / Tamil Nadu".
+const orgNode = {
   "@type": "SportsOrganization",
+  "@id": `${SITE.url}/#organization`,
   name: SITE.organiser,
+  alternateName: "Genesis Sports Foundation Coimbatore",
   url: SITE.url,
+  logo: `${SITE.url}/brand/genesis-logo.png`,
+  image: `${SITE.url}/brand/genesis-logo.png`,
+  description: SITE.description,
+  slogan: SITE.tagline,
   sport: "Athletics",
+  foundingDate: "2015",
+  areaServed: [
+    { "@type": "City", name: "Coimbatore" },
+    { "@type": "State", name: "Tamil Nadu" },
+    { "@type": "Country", name: "India" },
+  ],
+  knowsAbout: [
+    "Athletics coaching",
+    "Track and field",
+    "Junior athletics",
+    "Sprints, jumps and throws",
+    "Grassroots sports development",
+  ],
   address: {
     "@type": "PostalAddress",
     streetAddress: CONTACT.address,
     addressLocality: "Coimbatore",
     addressRegion: "Tamil Nadu",
+    postalCode: "641002",
     addressCountry: "IN",
   },
-  contactPoint: [
-    { "@type": "ContactPoint", telephone: CONTACT.phones[0], contactType: "customer service" },
-  ],
+  contactPoint: CONTACT.phones.map((p) => ({
+    "@type": "ContactPoint",
+    telephone: `+91${p.replace(/\s+/g, "")}`,
+    contactType: "customer service",
+    areaServed: "IN",
+    availableLanguage: ["Tamil", "English"],
+  })),
   email: CONTACT.emails[0],
+  // sameAs: social profile URLs (Instagram/YouTube/Facebook) — add once confirmed.
+};
+
+const websiteNode = {
+  "@type": "WebSite",
+  "@id": `${SITE.url}/#website`,
+  url: SITE.url,
+  name: SITE.name,
+  description: SITE.description,
+  inLanguage: "en-IN",
+  publisher: { "@id": `${SITE.url}/#organization` },
+};
+
+const siteSchema = {
+  "@context": "https://schema.org",
+  "@graph": [orgNode, websiteNode],
 };
 
 export default function RootLayout({
@@ -83,7 +126,7 @@ export default function RootLayout({
       className={`${anton.variable} ${inter.variable} h-full antialiased`}
     >
       <head>
-        <JsonLd data={orgSchema} />
+        <JsonLd data={siteSchema} />
       </head>
       <body className="min-h-full flex flex-col bg-ink text-cream">
         {children}

@@ -38,6 +38,14 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  href="/faq"
+                  className="text-sm text-sand transition-colors hover:text-ember"
+                >
+                  FAQ
+                </Link>
+              </li>
             </ul>
           </div>
 

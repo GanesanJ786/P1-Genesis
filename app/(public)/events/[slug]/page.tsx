@@ -48,6 +48,7 @@ export default async function EventDetailPage({
   const img = mediaUrl(event.cover_image);
   const past = isPastEvent(event);
 
+  const eventUrl = `${SITE.url}/events/${event.slug}`;
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -55,14 +56,34 @@ export default async function EventDetailPage({
     description: event.summary ?? undefined,
     startDate: event.start_date ?? undefined,
     endDate: event.end_date ?? event.start_date ?? undefined,
+    // Google Event rich-result signals: a scheduled, in-person meet.
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
       "@type": "Place",
       name: event.location ?? SITE.venue,
-      address: { "@type": "PostalAddress", addressLocality: "Coimbatore", addressCountry: "IN" },
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: event.location ?? SITE.venue,
+        addressLocality: "Coimbatore",
+        addressRegion: "Tamil Nadu",
+        addressCountry: "IN",
+      },
     },
     organizer: { "@type": "Organization", name: SITE.organiser, url: SITE.url },
-    url: `${SITE.url}/events/${event.slug}`,
-    ...(img ? { image: img } : {}),
+    url: eventUrl,
+    ...(img ? { image: [img] } : {}),
+    // Surface a "register" affordance in rich results while registration is open.
+    ...(!past && event.registration_url
+      ? {
+          offers: {
+            "@type": "Offer",
+            url: event.registration_url,
+            availability: "https://schema.org/InStock",
+            ...(event.start_date ? { validThrough: event.start_date } : {}),
+          },
+        }
+      : {}),
   };
 
   return (
