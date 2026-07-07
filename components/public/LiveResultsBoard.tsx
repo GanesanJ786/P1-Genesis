@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ResultCard } from "@/components/public/ResultCard";
 import type { Database } from "@/types/database.types";
@@ -84,6 +84,10 @@ export function LiveResultsBoard({ initialData }: Props) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeDiscipline, setActiveDiscipline] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  // Whether the Realtime channel is currently subscribed. When it is, the poll
+  // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
+  // races the live update and the value visibly flickers old→new→old.
+  const realtimeConnected = useRef(false);
 
   /* ── Supabase Realtime ─────────────────────────────────────────────────── */
   useEffect(() => {
@@ -102,13 +106,21 @@ export function LiveResultsBoard({ initialData }: Props) {
           setLastUpdated(new Date());
         },
       )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      .subscribe((status) => {
+        realtimeConnected.current = status === "SUBSCRIBED";
+      });
+    return () => {
+      realtimeConnected.current = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  /* ── Polling fallback — handles viewers beyond 200-connection limit ─────── */
+  /* ── Polling fallback — only runs while Realtime is *not* connected, so it
+        never fights a live update (handles viewers beyond the connection
+        limit or with Realtime blocked). ────────────────────────────────────── */
   useEffect(() => {
     const id = setInterval(async () => {
+      if (realtimeConnected.current) return; // Realtime healthy → no poll needed
       try {
         const res = await fetch("/api/live");
         if (res.ok) {
