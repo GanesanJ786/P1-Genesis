@@ -99,7 +99,9 @@ const orgNode = {
     availableLanguage: ["Tamil", "English"],
   })),
   email: CONTACT.emails[0],
-  // sameAs: social profile URLs (Instagram/YouTube/Facebook) — add once confirmed.
+  // Social profiles — links the brand entity to its social presence in Google's
+  // knowledge graph. Add YouTube/Facebook URLs here as they come online.
+  sameAs: ["https://www.instagram.com/gsfteams/"],
 };
 
 const websiteNode = {
