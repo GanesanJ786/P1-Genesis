@@ -79,7 +79,10 @@ function BannerPromo({ slide }: { slide: Slide }) {
 
 function BannerCarousel({ banners }: { banners: Slide[] }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start" }, [
-    Autoplay({ delay: 6000, stopOnInteraction: false }),
+    // Pause while the pointer is over the banner so visitors can read it, then
+    // resume once they move away (stopOnInteraction:false keeps it a temporary
+    // pause rather than stopping autoplay for good).
+    Autoplay({ delay: 6000, stopOnInteraction: false, stopOnMouseEnter: true }),
   ]);
 
   return (
