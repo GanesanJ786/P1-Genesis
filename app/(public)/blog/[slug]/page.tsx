@@ -9,6 +9,7 @@ import { BlogCard } from "@/components/public/BlogCard";
 import { getBlogPostBySlug, getPublishedBlogPosts } from "@/lib/queries";
 import { mediaUrl } from "@/lib/storage";
 import { SITE } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 export const revalidate = 3600;
 
@@ -226,13 +227,24 @@ export default async function BlogPostPage({
 
             {/* Cover image */}
             {img ? (
-              <div className="relative mt-8 aspect-video overflow-hidden rounded-2xl">
+              <div
+                className={cn(
+                  "relative mt-8 overflow-hidden rounded-2xl",
+                  post.cover_image_orientation === "portrait"
+                    ? "mx-auto aspect-[3/4] max-w-sm"
+                    : "aspect-video",
+                )}
+              >
                 <Image
                   src={img}
                   alt={post.title}
                   fill
                   className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 768px"
+                  sizes={
+                    post.cover_image_orientation === "portrait"
+                      ? "384px"
+                      : "(max-width: 768px) 100vw, 768px"
+                  }
                   itemProp="image"
                 />
               </div>

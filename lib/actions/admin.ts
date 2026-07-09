@@ -292,7 +292,7 @@ export async function saveBlogPost(
         : new Date().toISOString()
       : null;
 
-  const payload = {
+  const base = {
     title: d.title,
     slug: d.slug,
     excerpt: d.excerpt || null,
@@ -305,12 +305,26 @@ export async function saveBlogPost(
     focus_keyword: d.focus_keyword || null,
     ...(publishedAt !== undefined ? { published_at: publishedAt } : {}),
   };
+  // cover_image_orientation (0004) and sort_order (0005) are additive migrations.
+  // Include them, but if the DB hasn't been migrated yet, retry without them so
+  // editing posts never breaks.
+  const full = {
+    ...base,
+    cover_image_orientation: d.cover_image_orientation,
+    sort_order: d.sort_order,
+  };
 
-  const { error } = id
-    ? await supabase.from("blog_posts").update(payload).eq("id", id)
-    : await supabase
-        .from("blog_posts")
-        .insert({ ...payload, created_by: profile.id, published_at: publishedAt ?? null });
+  const save = (payload: typeof base | typeof full) =>
+    id
+      ? supabase.from("blog_posts").update(payload).eq("id", id)
+      : supabase
+          .from("blog_posts")
+          .insert({ ...payload, created_by: profile.id, published_at: publishedAt ?? null });
+
+  let { error } = await save(full);
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await save(base));
+  }
 
   if (error) return { ok: false, error: error.message };
 

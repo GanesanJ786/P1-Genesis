@@ -82,8 +82,10 @@ export type BlogPost = {
   excerpt: string | null;
   body: string | null;
   cover_image: string | null;
+  cover_image_orientation: "landscape" | "portrait";
   category: string;
   status: "draft" | "published";
+  sort_order: number;
   meta_title: string | null;
   meta_description: string | null;
   focus_keyword: string | null;
@@ -98,6 +100,7 @@ export async function getPublishedBlogPosts(): Promise<BlogPost[]> {
     .from("blog_posts")
     .select("*")
     .eq("status", "published")
+    .order("sort_order", { ascending: true })
     .order("published_at", { ascending: false });
   if (error || !data) return [];
   return data as BlogPost[];

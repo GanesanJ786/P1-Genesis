@@ -32,6 +32,7 @@ export default async function AdminBlogPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-white/5 text-xs uppercase tracking-widest text-sand">
               <tr>
+                <th className="px-5 py-3 font-medium">Order</th>
                 <th className="px-5 py-3 font-medium">Title</th>
                 <th className="px-5 py-3 font-medium">Category</th>
                 <th className="px-5 py-3 font-medium">Status</th>
@@ -42,6 +43,7 @@ export default async function AdminBlogPage() {
             <tbody>
               {posts.map((p) => (
                 <tr key={p.id} className="border-t border-white/5">
+                  <td className="px-5 py-4 text-sand">{p.sort_order}</td>
                   <td className="px-5 py-4">
                     <p className="font-medium text-cream">{p.title}</p>
                     <p className="text-xs text-sand">/{p.slug}</p>

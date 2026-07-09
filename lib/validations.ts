@@ -66,8 +66,10 @@ export const blogPostSchema = z.object({
   excerpt: z.string().max(400).optional().or(z.literal("")),
   body: z.string().max(12000).optional().or(z.literal("")),
   cover_image: z.string().optional().or(z.literal("")),
+  cover_image_orientation: z.enum(["landscape", "portrait"]).default("landscape"),
   category: z.enum(["news", "results", "stories", "training"]).default("news"),
   status: z.enum(["draft", "published"]).default("draft"),
+  sort_order: z.coerce.number().int().default(0),
   // Optional SEO overrides — blank falls back to title/excerpt at render time.
   meta_title: z.string().max(70).optional().or(z.literal("")),
   meta_description: z.string().max(160).optional().or(z.literal("")),

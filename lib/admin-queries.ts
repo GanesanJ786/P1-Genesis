@@ -8,6 +8,7 @@ export async function listBlogPosts(): Promise<Tables["blog_posts"]["Row"][]> {
   const { data } = await supabase
     .from("blog_posts")
     .select("*")
+    .order("sort_order", { ascending: true })
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   return data ?? [];

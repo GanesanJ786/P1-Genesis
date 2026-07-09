@@ -9,6 +9,7 @@ export type EventStatus = "draft" | "published" | "archived";
 export type SponsorTier = "title" | "platinum" | "gold" | "silver" | "supporter";
 export type BlogCategory = "news" | "results" | "stories" | "training";
 export type BlogStatus = "draft" | "published";
+export type ImageOrientation = "landscape" | "portrait";
 export type Json =
   | string
   | number
@@ -163,8 +164,10 @@ export interface Database {
           excerpt: string | null;
           body: string | null;
           cover_image: string | null;
+          cover_image_orientation: ImageOrientation;
           category: BlogCategory;
           status: BlogStatus;
+          sort_order: number;
           meta_title: string | null;
           meta_description: string | null;
           focus_keyword: string | null;
@@ -180,7 +183,9 @@ export interface Database {
           excerpt?: string | null;
           body?: string | null;
           cover_image?: string | null;
+          cover_image_orientation?: ImageOrientation;
           category?: BlogCategory;
+          sort_order?: number;
           status?: BlogStatus;
           meta_title?: string | null;
           meta_description?: string | null;

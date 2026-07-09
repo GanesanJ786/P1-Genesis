@@ -45,6 +45,13 @@ export function BlogForm({ post }: { post?: BlogRow }) {
         />
       </div>
 
+      <TextField
+        label="Sort order (lower shows first; ties break by newest published)"
+        name="sort_order"
+        type="number"
+        defaultValue={String(post?.sort_order ?? 0)}
+      />
+
       <TextArea label="Excerpt (shown on listing page)" name="excerpt" defaultValue={post?.excerpt ?? ""} />
       <TextArea label="Body" name="body" rows={12} defaultValue={post?.body ?? ""} />
 
@@ -53,6 +60,21 @@ export function BlogForm({ post }: { post?: BlogRow }) {
           Cover image
         </p>
         <ImageUploader field="cover_image" folder="blog" defaultPath={post?.cover_image} />
+        <div className="mt-4 max-w-xs">
+          <SelectField
+            label="Photo orientation"
+            name="cover_image_orientation"
+            defaultValue={post?.cover_image_orientation ?? "landscape"}
+            options={[
+              { value: "landscape", label: "Landscape — wide photo" },
+              { value: "portrait", label: "Portrait — tall phone photo" },
+            ]}
+          />
+          <p className="mt-1.5 text-xs text-sand/60">
+            Portrait photos (e.g. a phone shot of an athlete) display taller on the post page
+            instead of being cropped to a wide box.
+          </p>
+        </div>
       </div>
 
       {/* SEO — all optional; blank falls back to Title/Excerpt automatically. */}

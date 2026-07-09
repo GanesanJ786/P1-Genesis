@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { mediaUrl } from "@/lib/storage";
+import { cn } from "@/lib/utils";
 import type { BlogPost } from "@/lib/queries";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -23,7 +24,13 @@ export function BlogCard({ post }: { post: BlogPost }) {
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-sand/15 bg-ink-soft transition-colors hover:border-ember/50">
-      <Link href={`/blog/${post.slug}`} className="relative block aspect-video overflow-hidden">
+      <Link
+        href={`/blog/${post.slug}`}
+        className={cn(
+          "relative block overflow-hidden",
+          post.cover_image_orientation === "portrait" ? "aspect-[3/4]" : "aspect-video",
+        )}
+      >
         {img ? (
           <Image
             src={img}
