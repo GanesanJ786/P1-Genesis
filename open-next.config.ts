@@ -17,8 +17,44 @@ import doQueue from "@opennextjs/cloudflare/overrides/queue/do-queue";
  * those with Durable Objects (bound in wrangler.jsonc) so revalidation actually
  * takes effect.
  */
-export default defineCloudflareConfig({
+const config = defineCloudflareConfig({
   incrementalCache: r2IncrementalCache,
   tagCache: doShardedTagCache(),
   queue: doQueue,
 });
+
+/**
+ * Deploy-time skew protection.
+ *
+ * After a deploy, Cloudflare Workers Static Assets only serves the *current*
+ * build's content-hashed files. A stale HTML document (held by a browser /
+ * back-forward cache or an intermediary, kept alive by the ISR
+ * stale-while-revalidate window) still points at the previous build's
+ * `_next/static/*.css`, which now 404s — so the page renders as raw, unstyled
+ * HTML. With skew protection, OpenNext routes those old-asset requests to the
+ * prior Worker version via its preview URL, so they keep resolving for
+ * `maxVersionAgeDays` after each deploy.
+ *
+ * It requires CF_ACCOUNT_ID, CF_WORKER_NAME, CF_PREVIEW_DOMAIN and
+ * CF_WORKERS_SCRIPTS_API_TOKEN at deploy time, plus preview URLs enabled on the
+ * Worker (see DEPLOY_CLOUDFLARE.md). Enabling it *without* those makes
+ * `opennextjs-cloudflare deploy` exit(1), so we only switch it on once all four
+ * are present — the current auto-deploy keeps working until they're provisioned.
+ */
+const skewReady = [
+  "CF_ACCOUNT_ID",
+  "CF_WORKER_NAME",
+  "CF_PREVIEW_DOMAIN",
+  "CF_WORKERS_SCRIPTS_API_TOKEN",
+].every((key) => process.env[key]);
+
+config.cloudflare = {
+  ...config.cloudflare,
+  skewProtection: {
+    enabled: skewReady,
+    maxNumberOfVersions: 20,
+    maxVersionAgeDays: 7,
+  },
+};
+
+export default config;

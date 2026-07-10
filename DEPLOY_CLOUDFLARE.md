@@ -81,6 +81,57 @@ and set its secret header to the same `LIVE_WEBHOOK_SECRET` value from step 5.
 
 ---
 
+## Preventing unstyled pages after a deploy (asset skew)
+
+**Symptom:** occasionally a page (e.g. `/live`) loads as raw, unstyled HTML — giant
+logo, bulleted nav, serif text — then a hard refresh fixes it.
+
+**Cause:** every build content-hashes `_next/static/*` (the CSS/JS filenames
+change). Cloudflare Workers Static Assets only serves the **current** deploy's
+files, so the previous build's `*.css` returns 404. Meanwhile ISR HTML is served
+with a long `stale-while-revalidate` window, so a browser / back-forward /
+intermediary cache can hand a visitor **older HTML that points at the now-deleted
+stylesheet** → it 404s → the page renders unstyled. It's intermittent because it
+only bites around each deploy.
+
+**Two-layer fix (already wired in code):**
+1. **Client backstop** — `app/layout.tsx` runs a tiny head script that reloads
+   once (guarded per session) if the theme stylesheet didn't apply. Works with no
+   setup; masks the skew.
+2. **Skew protection** — `next.config.ts` tags each build with a `deploymentId`
+   (so assets get `?dpl=<id>`), and `open-next.config.ts` enables OpenNext skew
+   protection, which routes requests for an *older* build's assets to that build's
+   Worker version (via its preview URL) so they keep resolving for 7 days. This is
+   the real fix and needs the one-time setup below.
+
+### Enabling skew protection (one-time owner setup)
+Skew protection stays **off** until all four vars below exist at build time — so
+the current auto-deploy keeps working until you provision them (no broken deploys).
+
+1. Worker → **Settings → Domains & Routes** (or **Preview URLs**): ensure
+   **Preview URLs are enabled** (they are by default; skew routing needs them).
+2. Create a Cloudflare API token (**My Profile → API Tokens → Create Token**) with
+   **Account → Workers Scripts → Read** permission for this account.
+3. Cloudflare → your Worker → **Settings → Build → Variables and secrets**, add as
+   **build-time** vars/secrets (the build reads `process.env`, not just runtime):
+
+   | Name | Type | Value |
+   |------|------|-------|
+   | `CF_ACCOUNT_ID` | Build var | Your Cloudflare account ID |
+   | `CF_WORKER_NAME` | Build var | `genesis-trackfest` |
+   | `CF_PREVIEW_DOMAIN` | Build var | Worker's preview subdomain (the `<name>.<CF_PREVIEW_DOMAIN>.workers.dev` middle part) |
+   | `CF_WORKERS_SCRIPTS_API_TOKEN` | **Secret** | The token from step 2 |
+
+4. Push (or re-run the deploy). The build logs should show skew protection active,
+   and page HTML asset URLs will carry `?dpl=<commit-sha>`. `WORKERS_CI_COMMIT_SHA`
+   (auto-provided by Workers Builds) becomes the `deploymentId`.
+
+> Bonus, unrelated: on the Free plan check **Speed → Optimization** and keep
+> **Rocket Loader** and **Auto Minify** OFF — they can intermittently break a
+> Next app's assets.
+
+---
+
 ## Post-deploy verification checklist
 - [ ] Public pages render; images load (`/`, `/foundation`, `/events`, `/blog`).
 - [ ] Dynamic OG image loads: `https://gsfteams.com/opengraph-image`.
