@@ -122,6 +122,23 @@ const siteSchema = {
   "@graph": [orgNode, websiteNode],
 };
 
+// Client-side backstop for CDN asset skew. After a deploy, Cloudflare Workers
+// Static Assets only serves the current build's hashed files. A stale HTML
+// document — held by a browser/back-forward cache or an intermediary honouring
+// the ISR stale-while-revalidate window — still references the previous build's
+// stylesheet, which now 404s, so the page renders unstyled (raw HTML). We probe
+// a theme CSS variable on `load`; if it's missing the stylesheet didn't apply,
+// so we reload once (guarded per session against loops) to pull HTML that
+// matches the live assets. Skew protection (open-next.config.ts) is the upstream
+// fix; this covers the window before it's provisioned and any cache we can't reach.
+const cssSkewGuard =
+  '(function(){try{addEventListener("load",function(){' +
+  'var v=getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim();' +
+  'if(v){sessionStorage.removeItem("gsfCssRetry");return;}' +
+  'if(sessionStorage.getItem("gsfCssRetry"))return;' +
+  'sessionStorage.setItem("gsfCssRetry","1");location.reload();' +
+  '});}catch(e){}})();';
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -131,6 +148,7 @@ export default function RootLayout({
       className={`${anton.variable} ${inter.variable} h-full antialiased`}
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: cssSkewGuard }} />
         <JsonLd data={siteSchema} />
       </head>
       <body className="min-h-full flex flex-col bg-ink text-cream">
