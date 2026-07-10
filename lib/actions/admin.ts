@@ -228,27 +228,73 @@ export async function saveSponsor(
   const payload = {
     name: d.name,
     tier: d.tier,
+    description: d.description || null,
     logo_path: d.logo_path || null,
+    banner_path: d.banner_path || null,
     website_url: d.website_url || null,
     amount_inr: d.amount_inr ?? null,
     is_active: d.is_active,
     sort_order: d.sort_order,
   };
-  const { error } = id
-    ? await supabase.from("sponsors").update(payload).eq("id", id)
-    : await supabase.from("sponsors").insert(payload);
-  if (error) return { ok: false, error: error.message };
+  let sponsorId = id;
+  if (id) {
+    const { error } = await supabase.from("sponsors").update(payload).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { data, error } = await supabase
+      .from("sponsors")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) return { ok: false, error: error.message };
+    sponsorId = data?.id ?? null;
+  }
 
-  revalidatePublic(["/", "/sponsorship"]);
+  // Sync which live events showcase this sponsor (sponsor-side picker). Scoped
+  // to currently live-tracked events so links to other events stay untouched;
+  // mirrors the event-side EventSponsorPicker on the other axis of the junction.
+  if (sponsorId && formData.get("event_ids_present")) {
+    const selected = formData.getAll("event_ids").map(String).filter(Boolean);
+    const { data: liveEvents } = await supabase
+      .from("events")
+      .select("id")
+      .eq("live_tracking", true);
+    const candidateIds = (liveEvents ?? []).map((e) => e.id);
+    if (candidateIds.length > 0) {
+      await supabase
+        .from("event_sponsors")
+        .delete()
+        .eq("sponsor_id", sponsorId)
+        .in("event_id", candidateIds);
+      const toInsert = selected.filter((eid) => candidateIds.includes(eid));
+      if (toInsert.length > 0) {
+        await supabase.from("event_sponsors").insert(
+          toInsert.map((event_id) => ({
+            event_id,
+            sponsor_id: sponsorId,
+            sort_order: d.sort_order,
+          })),
+        );
+      }
+    }
+  }
+
+  // Sponsors also surface on the live-event pages (via event_sponsors).
+  revalidatePublic(["/", "/sponsorship", "/live"]);
   redirect("/admin/sponsors");
 }
 
-export async function deleteSponsor(id: string, logo?: string | null) {
+export async function deleteSponsor(
+  id: string,
+  logo?: string | null,
+  banner?: string | null,
+) {
   await requireAdmin();
   const supabase = await createClient();
   await supabase.from("sponsors").delete().eq("id", id);
   await removeMedia(logo);
-  revalidatePublic(["/", "/sponsorship"]);
+  await removeMedia(banner);
+  revalidatePublic(["/", "/sponsorship", "/live"]);
   revalidatePath("/admin/sponsors");
 }
 

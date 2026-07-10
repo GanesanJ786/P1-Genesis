@@ -181,6 +181,29 @@ export async function listEventSponsorIds(eventId: string): Promise<string[]> {
   return (data ?? []).map((r) => r.sponsor_id);
 }
 
+/** Live-tracked events, for the sponsor form's "show on live events" picker. */
+export async function listLiveEventOptions(): Promise<
+  { id: string; title: string; slug: string }[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("events")
+    .select("id, title, slug")
+    .eq("live_tracking", true)
+    .order("start_date", { ascending: false });
+  return data ?? [];
+}
+
+/** Event ids a sponsor is currently attached to (reverse of listEventSponsorIds). */
+export async function listSponsorEventIds(sponsorId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("event_sponsors")
+    .select("event_id")
+    .eq("sponsor_id", sponsorId);
+  return (data ?? []).map((r) => r.event_id);
+}
+
 /** Rows created before migration 0006 that no event has adopted yet. */
 export async function countUnassignedLiveItems(): Promise<number> {
   const supabase = await createClient();

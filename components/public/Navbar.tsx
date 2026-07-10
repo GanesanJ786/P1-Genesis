@@ -88,27 +88,32 @@ export function Navbar() {
         </button>
       </nav>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer. grid-rows 0fr→1fr animates to the content's exact height
+          so the CTA + date can never be clipped (a fixed max-height was cutting
+          them off). The inner wrapper caps at the viewport and scrolls on very
+          short screens. */}
       <div
         className={cn(
-          "overflow-hidden border-t border-sand/10 bg-ink/95 backdrop-blur-md transition-[max-height] duration-300 lg:hidden",
-          open ? "max-h-[28rem]" : "max-h-0",
+          "grid overflow-hidden transition-[grid-template-rows] duration-300 lg:hidden",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}
       >
-        <div className="flex flex-col gap-1 px-5 py-4">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-md px-3 py-3 text-base text-cream/90 hover:bg-ink-soft hover:text-ember"
-            >
-              {link.label}
-            </Link>
-          ))}
-          <ButtonLink href="/sponsorship" className="mt-2 w-full" size="md">
-            Become a Sponsor
-          </ButtonLink>
-          <p className="mt-3 px-3 text-xs text-sand">{SITE.dates}</p>
+        <div className="overflow-hidden">
+          <div className="flex max-h-[calc(100dvh-4rem)] flex-col gap-1 overflow-y-auto border-t border-sand/10 bg-ink/95 px-5 py-4 backdrop-blur-md">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-md px-3 py-3 text-base text-cream/90 hover:bg-ink-soft hover:text-ember"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <ButtonLink href="/sponsorship" className="mt-2 w-full" size="md">
+              Become a Sponsor
+            </ButtonLink>
+            <p className="mt-3 px-3 text-xs text-sand">{SITE.dates}</p>
+          </div>
         </div>
       </div>
     </header>
