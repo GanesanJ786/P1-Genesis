@@ -45,7 +45,7 @@ export default async function AdminSponsorsPage() {
                       >
                         <Pencil size={13} /> Edit
                       </Link>
-                      <DeleteButton action={deleteSponsor.bind(null, s.id, s.logo_path)} />
+                      <DeleteButton action={deleteSponsor.bind(null, s.id, s.logo_path, s.banner_path)} />
                     </div>
                   </td>
                 </tr>

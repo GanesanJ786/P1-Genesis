@@ -71,8 +71,19 @@ export type SlideInput = z.infer<typeof slideSchema>;
 
 export const sponsorSchema = z.object({
   name: z.string().min(2, "Name is required").max(160),
-  tier: z.enum(["title", "platinum", "gold", "silver", "supporter"]),
+  tier: z.enum([
+    "title",
+    "platinum",
+    "gold",
+    "silver",
+    "bronze",
+    "medical",
+    "partner",
+    "supporter",
+  ]),
+  description: z.string().max(600).optional().or(z.literal("")),
   logo_path: z.string().optional().or(z.literal("")),
+  banner_path: z.string().optional().or(z.literal("")),
   website_url: z.string().url("Enter a valid URL").optional().or(z.literal("")),
   amount_inr: z.coerce.number().int().nonnegative().optional(),
   is_active: z.boolean().default(true),

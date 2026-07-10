@@ -6,7 +6,15 @@
 
 export type UserRole = "admin" | "staff" | "coach";
 export type EventStatus = "draft" | "published" | "archived";
-export type SponsorTier = "title" | "platinum" | "gold" | "silver" | "supporter";
+export type SponsorTier =
+  | "title"
+  | "platinum"
+  | "gold"
+  | "silver"
+  | "bronze"
+  | "medical"
+  | "partner"
+  | "supporter";
 export type BlogCategory = "news" | "results" | "stories" | "training";
 export type BlogStatus = "draft" | "published";
 export type ImageOrientation = "landscape" | "portrait";
@@ -112,7 +120,9 @@ export interface Database {
           id: string;
           name: string;
           tier: SponsorTier;
+          description: string | null;
           logo_path: string | null;
+          banner_path: string | null;
           website_url: string | null;
           amount_inr: number | null;
           is_active: boolean;
@@ -123,7 +133,9 @@ export interface Database {
           id?: string;
           name: string;
           tier: SponsorTier;
+          description?: string | null;
           logo_path?: string | null;
+          banner_path?: string | null;
           website_url?: string | null;
           amount_inr?: number | null;
           is_active?: boolean;

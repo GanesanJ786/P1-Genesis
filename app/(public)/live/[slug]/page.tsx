@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container, Section } from "@/components/ui/Section";
 import { LiveEventBoard } from "@/components/public/LiveEventBoard";
-import { SponsorStrip } from "@/components/public/SponsorStrip";
+import { EventSponsors } from "@/components/public/EventSponsors";
 import { JsonLd } from "@/components/ui/JsonLd";
 import {
   getLiveTrackedEvents,
@@ -141,7 +141,7 @@ export default async function LiveEventPage({
 
           {sponsors.length > 0 ? (
             <div className="mt-16 border-t border-sand/15 pt-10">
-              <SponsorStrip sponsors={sponsors} />
+              <EventSponsors sponsors={sponsors} />
             </div>
           ) : null}
         </Container>
