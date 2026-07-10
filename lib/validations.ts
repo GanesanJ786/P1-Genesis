@@ -22,8 +22,41 @@ export const eventSchema = z.object({
     .optional()
     .or(z.literal("")),
   media_links: z.string().max(4000).optional().or(z.literal("")),
+  live_tracking: z.boolean().default(false),
 });
 export type EventInput = z.infer<typeof eventSchema>;
+
+export const liveItemSchema = z.object({
+  event_id: z.string().uuid("Pick the event this item belongs to"),
+  // Free-form; the server slugifies it (so "100M Boys" → "100m-boys"), which is
+  // why it isn't rejected for casing/spaces here.
+  event_key: z.string().max(160).optional().or(z.literal("")),
+  event_name: z.string().min(2, "Event name is required").max(160),
+  category: z.string().min(1, "Category is required").max(80),
+  gender: z.string().max(40).optional().or(z.literal("")),
+  event_type: z.string().max(80).optional().or(z.literal("")),
+  heat_label: z.string().max(80).optional().or(z.literal("")),
+  day: z.coerce.number().int().min(1).default(1),
+  sort_order: z.coerce.number().int().default(0),
+  status: z.enum(["upcoming", "in_progress", "paused", "completed"]),
+  scheduled_at: z.string().optional().or(z.literal("")),
+  venue: z.string().max(160).optional().or(z.literal("")),
+  poc_name: z.string().max(120).optional().or(z.literal("")),
+  poc_phone: z.string().max(40).optional().or(z.literal("")),
+  wind: z.string().max(40).optional().or(z.literal("")),
+  participants_count: z.coerce.number().int().nonnegative().optional(),
+  notes: z.string().max(500).optional().or(z.literal("")),
+  media_links: z.string().max(4000).optional().or(z.literal("")),
+});
+export type LiveItemInput = z.infer<typeof liveItemSchema>;
+
+export const announcementSchema = z.object({
+  event_id: z.string().uuid(),
+  message: z.string().min(2, "Write a short message").max(500),
+  type: z.enum(["info", "delay", "venue", "safety", "results"]).default("info"),
+  is_pinned: z.boolean().default(false),
+});
+export type AnnouncementInput = z.infer<typeof announcementSchema>;
 
 export const slideSchema = z.object({
   group_key: z.string().min(1).default("home_hero"),

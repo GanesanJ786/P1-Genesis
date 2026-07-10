@@ -13,24 +13,30 @@ import { formatDateRange } from "@/lib/utils";
 import { RegisterButton } from "@/components/public/RegisterButton";
 
 /**
- * Shared event card for the homepage and the events listing.
+ * Shared event card for the homepage, the events listing and the live hub.
  * Upcoming events surface a Register CTA (external Google Form); completed
- * events show a "Successful event" badge and a media indicator.
+ * events show a "Successful event" badge and a media indicator. The live hub
+ * points cards at /live/[slug] via `href` and shows a pulsing LIVE badge.
  */
 export function EventCard({
   event,
   past = false,
+  href,
+  live = false,
 }: {
   event: EventItem;
   past?: boolean;
+  href?: string;
+  live?: boolean;
 }) {
   const img = mediaUrl(event.cover_image);
   const mediaCount = event.media?.length ?? 0;
+  const target = href ?? `/events/${event.slug}`;
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-sand/15 bg-ink-soft transition-colors hover:border-ember/50">
       <Link
-        href={`/events/${event.slug}`}
+        href={target}
         className="relative block h-44 overflow-hidden sm:h-48"
       >
         {img ? (
@@ -50,12 +56,19 @@ export function EventCard({
         )}
         <span
           className={`absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-            past
-              ? "bg-ink/80 text-sand"
-              : "bg-ember text-white"
+            live
+              ? "bg-red-600 text-white"
+              : past
+                ? "bg-ink/80 text-sand"
+                : "bg-ember text-white"
           }`}
         >
-          {past ? (
+          {live ? (
+            <>
+              <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              Live
+            </>
+          ) : past ? (
             <>
               <CheckCircle2 size={12} /> Successful
             </>
@@ -87,21 +100,21 @@ export function EventCard({
         </div>
 
         <h3 className="mt-3 font-display text-xl uppercase leading-tight text-cream">
-          <Link href={`/events/${event.slug}`} className="hover:text-ember">
+          <Link href={target} className="hover:text-ember">
             {event.title}
           </Link>
         </h3>
         <p className="mt-2 flex-1 text-sm text-sand">{event.summary}</p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          {!past && event.registration_url ? (
+          {!past && !live && event.registration_url ? (
             <RegisterButton url={event.registration_url} size="sm" />
           ) : null}
           <Link
-            href={`/events/${event.slug}`}
+            href={target}
             className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:gap-2"
           >
-            View details <ArrowRight size={15} />
+            {live ? "View live results" : "View details"} <ArrowRight size={15} />
           </Link>
         </div>
       </div>

@@ -12,12 +12,17 @@ import {
   sponsorSchema,
   teamMemberSchema,
   blogPostSchema,
+  liveItemSchema,
+  announcementSchema,
 } from "@/lib/validations";
 import { slugify } from "@/lib/utils";
 import { parseMediaLinks } from "@/lib/events";
-import type { Database } from "@/types/database.types";
+import { isMissingColumnError } from "@/lib/supabase/errors";
+import type { Finisher } from "@/lib/live";
+import type { Database, LiveStatus } from "@/types/database.types";
 
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
+type LiveInsert = Database["public"]["Tables"]["live_results"]["Insert"];
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -52,6 +57,7 @@ export async function saveEvent(
   const parsed = eventSchema.safeParse({
     ...raw,
     slug: raw.slug || slugify(raw.title ?? ""),
+    live_tracking: raw.live_tracking === "on" || raw.live_tracking === "true",
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message };
@@ -71,13 +77,14 @@ export async function saveEvent(
     status: d.status,
     sort_order: d.sort_order,
   };
-  // The media/registration columns are added by migration 0003. Include them,
-  // but if the DB hasn't been migrated yet, retry without them so editing
-  // events never breaks.
+  // The media/registration columns are added by migration 0003 and
+  // live_tracking by 0006. Include them, but if the DB hasn't been migrated
+  // yet, retry without them so editing events never breaks.
   const full: EventInsert = {
     ...base,
     registration_url: d.registration_url || null,
     media: parseMediaLinks(d.media_links),
+    live_tracking: d.live_tracking,
   };
 
   const save = (payload: EventInsert) =>
@@ -92,15 +99,42 @@ export async function saveEvent(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePublic(["/", "/events", `/events/${d.slug}`]);
-  redirect("/admin/events");
-}
+  // Per-event sponsor showcase: sync the junction only when the form rendered
+  // the picker (marker field), so older/other forms can't wipe assignments.
+  // Best-effort — a database without migration 0006 skips silently.
+  if (formData.get("sponsor_ids_present")) {
+    let eventId = id;
+    if (!eventId) {
+      const { data } = await supabase
+        .from("events")
+        .select("id")
+        .eq("slug", d.slug)
+        .single();
+      eventId = data?.id ?? null;
+    }
+    if (eventId) {
+      const sponsorIds = formData
+        .getAll("sponsor_ids")
+        .map(String)
+        .filter(Boolean);
+      const { error: clearError } = await supabase
+        .from("event_sponsors")
+        .delete()
+        .eq("event_id", eventId);
+      if (!clearError && sponsorIds.length > 0) {
+        await supabase.from("event_sponsors").insert(
+          sponsorIds.map((sponsor_id, i) => ({
+            event_id: eventId,
+            sponsor_id,
+            sort_order: i,
+          })),
+        );
+      }
+    }
+  }
 
-/** Detect a "column does not exist" error so we can retry without new columns. */
-function isMissingColumnError(error: { code?: string; message?: string }): boolean {
-  if (error.code === "PGRST204" || error.code === "42703") return true;
-  const m = error.message ?? "";
-  return /registration_url|'media'|\bmedia\b column|schema cache/i.test(m);
+  revalidatePublic(["/", "/events", `/events/${d.slug}`, "/live", `/live/${d.slug}`]);
+  redirect("/admin/events");
 }
 
 export async function deleteEvent(id: string, cover?: string | null) {
@@ -346,18 +380,228 @@ export async function deleteBlogPost(id: string, cover?: string | null) {
 /* -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
-/* Live results                                                                */
+/* Live hub: schedule items, statuses, announcements                          */
 /* -------------------------------------------------------------------------- */
 
-export async function clearLiveResults(): Promise<void> {
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+/** Slug of a live event, for revalidating its public page (best effort). */
+async function liveEventSlug(
+  supabase: SupabaseServer,
+  eventId: string | null | undefined,
+): Promise<string | null> {
+  if (!eventId) return null;
+  const { data } = await supabase
+    .from("events")
+    .select("slug")
+    .eq("id", eventId)
+    .maybeSingle();
+  return data?.slug ?? null;
+}
+
+function revalidateLive(slug: string | null) {
+  revalidatePath("/live");
+  if (slug) revalidatePath(`/live/${slug}`);
+  revalidatePath("/admin/live");
+}
+
+/** Assemble the fixed 6-row results editor (bib_1…6 etc.) into finishers. */
+function finishersFromForm(raw: Record<string, string>): Finisher[] {
+  const out: Finisher[] = [];
+  for (let i = 1; i <= 6; i += 1) {
+    const name = (raw[`name_${i}`] ?? "").trim();
+    if (!name) continue; // empty rows are dropped
+    const bib = (raw[`bib_${i}`] ?? "").trim();
+    const record = (raw[`record_${i}`] ?? "").trim();
+    out.push({
+      rank: i,
+      ...(bib ? { bib } : {}),
+      name,
+      school: (raw[`school_${i}`] ?? "").trim(),
+      result: (raw[`mark_${i}`] ?? "").trim(),
+      ...(record ? { record } : {}),
+    });
+  }
+  return out;
+}
+
+/** datetime-local is timezone-naive; the meet runs in IST. */
+function toIstTimestamp(value: string): string {
+  const base = value.length === 16 ? `${value}:00` : value;
+  return `${base}+05:30`;
+}
+
+export async function saveLiveItem(
+  id: string | null,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const raw = Object.fromEntries(formData) as Record<string, string>;
+
+  const parsed = liveItemSchema.safeParse({
+    ...raw,
+    participants_count: raw.participants_count || undefined,
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message };
+  }
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const eventKey = d.event_key
+    ? slugify(d.event_key)
+    : slugify(
+        [d.event_name, d.category, d.gender, `d${d.day}`, d.heat_label || "final"]
+          .filter(Boolean)
+          .join(" "),
+      );
+
+  const base: LiveInsert = {
+    event_key: eventKey,
+    event_name: d.event_name,
+    category: d.category,
+    gender: d.gender || null,
+    event_type: d.event_type || null,
+    heat_label: d.heat_label || null,
+    day: d.day,
+    sort_order: d.sort_order,
+    status: d.status,
+    results: finishersFromForm(raw),
+    notes: d.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+  // Schedule-metadata columns are added by migration 0006; retry without them
+  // on an un-migrated database (a 'paused' status still needs the migration).
+  const full: LiveInsert = {
+    ...base,
+    event_id: d.event_id,
+    scheduled_at: d.scheduled_at ? toIstTimestamp(d.scheduled_at) : null,
+    venue: d.venue || null,
+    poc_name: d.poc_name || null,
+    poc_phone: d.poc_phone || null,
+    wind: d.wind || null,
+    participants_count: d.participants_count ?? null,
+    media: parseMediaLinks(d.media_links),
+  };
+
+  const save = (payload: LiveInsert) =>
+    id
+      ? supabase.from("live_results").update(payload).eq("id", id)
+      : supabase.from("live_results").insert(payload);
+
+  let { error } = await save(full);
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await save(base));
+  }
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidateLive(await liveEventSlug(supabase, d.event_id));
+  redirect("/admin/live");
+}
+
+export async function deleteLiveItem(id: string): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("live_results")
+    .select("event_id")
+    .eq("id", id)
+    .maybeSingle();
+  await supabase.from("live_results").delete().eq("id", id);
+  revalidateLive(await liveEventSlug(supabase, data?.event_id));
+}
+
+/** One-tap status switch (Upcoming | Live | Paused | Done) on /admin/live. */
+export async function setLiveItemStatus(
+  id: string,
+  status: LiveStatus,
+): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("live_results")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("event_id")
+    .maybeSingle();
+  revalidateLive(await liveEventSlug(supabase, data?.event_id));
+}
+
+/** Wipe one event's schedule/results (start-of-day reset). */
+export async function clearLiveResults(eventId: string): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("live_results").delete().eq("event_id", eventId);
+  revalidateLive(await liveEventSlug(supabase, eventId));
+}
+
+/** Attach rows created before migration 0006 (event_id null) to an event. */
+export async function adoptUnassignedLiveItems(eventId: string): Promise<void> {
   await requireAdmin();
   const supabase = await createClient();
   await supabase
     .from("live_results")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
-  revalidatePath("/live");
-  revalidatePath("/admin/live");
+    .update({ event_id: eventId })
+    .is("event_id", null);
+  revalidateLive(await liveEventSlug(supabase, eventId));
+}
+
+export async function postAnnouncement(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const profile = await requireAdmin();
+  const raw = Object.fromEntries(formData) as Record<string, string>;
+  const parsed = announcementSchema.safeParse({
+    ...raw,
+    is_pinned: raw.is_pinned === "on" || raw.is_pinned === "true",
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message };
+  }
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("announcements").insert({
+    event_id: d.event_id,
+    message: d.message,
+    type: d.type,
+    is_pinned: d.is_pinned,
+    created_by: profile.id,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidateLive(await liveEventSlug(supabase, d.event_id));
+  return { ok: true };
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("announcements")
+    .select("event_id")
+    .eq("id", id)
+    .maybeSingle();
+  await supabase.from("announcements").delete().eq("id", id);
+  revalidateLive(await liveEventSlug(supabase, data?.event_id));
+}
+
+export async function toggleAnnouncementPinned(
+  id: string,
+  next: boolean,
+): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("announcements")
+    .update({ is_pinned: next })
+    .eq("id", id)
+    .select("event_id")
+    .maybeSingle();
+  revalidateLive(await liveEventSlug(supabase, data?.event_id));
 }
 
 export async function saveContent(

@@ -4,17 +4,28 @@ import { useActionState } from "react";
 import { saveEvent, type ActionResult } from "@/lib/actions/admin";
 import { mediaToText, normalizeMedia } from "@/lib/events";
 import { ImageUploader } from "./ImageUploader";
+import { EventSponsorPicker } from "./EventSponsorPicker";
 import {
   TextField,
   TextArea,
   SelectField,
+  CheckboxField,
   SubmitButton,
 } from "./fields";
 import type { Database } from "@/types/database.types";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
+type SponsorRow = Database["public"]["Tables"]["sponsors"]["Row"];
 
-export function EventForm({ event }: { event?: EventRow }) {
+export function EventForm({
+  event,
+  sponsors = [],
+  sponsorIds = [],
+}: {
+  event?: EventRow;
+  sponsors?: SponsorRow[];
+  sponsorIds?: string[];
+}) {
   const action = saveEvent.bind(null, event?.id ?? null);
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
     action,
@@ -83,6 +94,15 @@ export function EventForm({ event }: { event?: EventRow }) {
       <p className="-mt-2 text-xs text-sand">
         Past-dated published events move to “Successful Events” automatically.
       </p>
+
+      <div className="space-y-4 rounded-xl border border-white/10 p-4">
+        <CheckboxField
+          label="Show in Live Hub (live schedule, results & announcements at /live)"
+          name="live_tracking"
+          defaultChecked={event?.live_tracking ?? false}
+        />
+        <EventSponsorPicker sponsors={sponsors} selectedIds={sponsorIds} />
+      </div>
 
       {state?.error ? <p className="text-sm text-ember-bright">{state.error}</p> : null}
       <SubmitButton>{event ? "Update event" : "Create event"}</SubmitButton>

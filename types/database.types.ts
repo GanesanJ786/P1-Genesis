@@ -10,6 +10,8 @@ export type SponsorTier = "title" | "platinum" | "gold" | "silver" | "supporter"
 export type BlogCategory = "news" | "results" | "stories" | "training";
 export type BlogStatus = "draft" | "published";
 export type ImageOrientation = "landscape" | "portrait";
+export type LiveStatus = "upcoming" | "in_progress" | "paused" | "completed";
+export type AnnouncementType = "info" | "delay" | "venue" | "safety" | "results";
 export type Json =
   | string
   | number
@@ -53,6 +55,7 @@ export interface Database {
           sort_order: number;
           registration_url: string | null;
           media: Json;
+          live_tracking: boolean;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -71,6 +74,7 @@ export interface Database {
           sort_order?: number;
           registration_url?: string | null;
           media?: Json;
+          live_tracking?: boolean;
           created_by?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
@@ -228,9 +232,17 @@ export interface Database {
           heat_label: string | null;
           day: number;
           sort_order: number;
-          status: "upcoming" | "in_progress" | "completed";
+          status: LiveStatus;
           results: Json;
           notes: string | null;
+          event_id: string | null;
+          scheduled_at: string | null;
+          venue: string | null;
+          poc_name: string | null;
+          poc_phone: string | null;
+          wind: string | null;
+          participants_count: number | null;
+          media: Json;
           updated_at: string;
         };
         Insert: {
@@ -243,12 +255,55 @@ export interface Database {
           heat_label?: string | null;
           day?: number;
           sort_order?: number;
-          status?: "upcoming" | "in_progress" | "completed";
+          status?: LiveStatus;
           results?: Json;
           notes?: string | null;
+          event_id?: string | null;
+          scheduled_at?: string | null;
+          venue?: string | null;
+          poc_name?: string | null;
+          poc_phone?: string | null;
+          wind?: string | null;
+          participants_count?: number | null;
+          media?: Json;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["live_results"]["Insert"]>;
+        Relationships: [];
+      };
+      announcements: {
+        Row: {
+          id: string;
+          event_id: string;
+          message: string;
+          type: AnnouncementType;
+          is_pinned: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          message: string;
+          type?: AnnouncementType;
+          is_pinned?: boolean;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["announcements"]["Insert"]>;
+        Relationships: [];
+      };
+      event_sponsors: {
+        Row: {
+          event_id: string;
+          sponsor_id: string;
+          sort_order: number;
+        };
+        Insert: {
+          event_id: string;
+          sponsor_id: string;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_sponsors"]["Insert"]>;
         Relationships: [];
       };
     };

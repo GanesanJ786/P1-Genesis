@@ -1,35 +1,34 @@
-import type { Database, Json } from "@/types/database.types";
+import { MapPin, Wind, Users, Phone } from "lucide-react";
+import {
+  LIVE_STATUS_LABELS,
+  LIVE_STATUS_STYLES,
+  TOP_FINISHERS,
+  parseFinishers,
+  isFinalHeat,
+  liveItemMedia,
+  relativeTime,
+  formatScheduledTime,
+  type LiveRow,
+} from "@/lib/live";
+import { Countdown } from "@/components/public/Countdown";
+import { ShareResultButton } from "@/components/public/ShareResultButton";
+import { MediaGallery } from "@/components/public/MediaGallery";
+import { FinisherList } from "@/components/public/FinisherList";
 
-type LiveResult = Database["public"]["Tables"]["live_results"]["Row"];
-
-type FinisherEntry = { rank: number; name: string; school: string; result: string };
-
-const MEDALS = ["🥇", "🥈", "🥉"];
-
-const STATUS_STYLES = {
-  in_progress: "bg-amber-500/20 text-amber-400 border border-amber-500/30",
-  completed: "bg-green-500/15 text-green-400",
-  upcoming: "bg-white/10 text-sand",
-};
-
-function parseFinishers(raw: Json): FinisherEntry[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as FinisherEntry[]).filter((r) => r?.name);
-}
-
-function relativeTime(isoStr: string) {
-  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  return `${Math.floor(diff / 3600)}h ago`;
-}
-
-export function ResultCard({ result }: { result: LiveResult }) {
-  const finishers = parseFinishers(result.results);
-  const statusStyle = STATUS_STYLES[result.status] ?? STATUS_STYLES.upcoming;
+export function ResultCard({ result }: { result: LiveRow }) {
+  const finishers = parseFinishers(result.results).slice(0, TOP_FINISHERS);
+  const statusStyle = LIVE_STATUS_STYLES[result.status] ?? LIVE_STATUS_STYLES.upcoming;
+  const statusLabel = LIVE_STATUS_LABELS[result.status] ?? result.status;
   const heatLabel = result.heat_label;
-  // Medals shown only in finals (null / empty / "Final" heat)
-  const isFinal = !heatLabel || heatLabel.trim().toLowerCase() === "final";
+  const isFinal = isFinalHeat(heatLabel);
+  const isUpcoming = result.status === "upcoming";
+  const isCompleted = result.status === "completed";
+  const media = isCompleted ? liveItemMedia(result) : [];
+  const hasMeta =
+    (isUpcoming && result.scheduled_at) ||
+    result.venue ||
+    result.wind ||
+    result.participants_count;
 
   return (
     <div
@@ -68,7 +67,7 @@ export function ResultCard({ result }: { result: LiveResult }) {
         <span
           className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${statusStyle}`}
         >
-          {result.status === "in_progress" ? "● Live" : result.status}
+          {statusLabel}
         </span>
       </div>
 
@@ -76,50 +75,77 @@ export function ResultCard({ result }: { result: LiveResult }) {
         {result.event_name}
       </h3>
 
-      {/* Finishers list */}
+      {/* Schedule meta: time/venue/wind/participants */}
+      {hasMeta ? (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-sand">
+          {isUpcoming && result.scheduled_at ? (
+            <span className="font-medium text-cream/90">
+              {formatScheduledTime(result.scheduled_at)}
+            </span>
+          ) : null}
+          {result.venue ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin size={12} className="text-ember" /> {result.venue}
+            </span>
+          ) : null}
+          {result.wind ? (
+            <span className="inline-flex items-center gap-1">
+              <Wind size={12} className="text-ember" /> {result.wind}
+            </span>
+          ) : null}
+          {result.participants_count ? (
+            <span className="inline-flex items-center gap-1">
+              <Users size={12} className="text-ember" /> {result.participants_count} athletes
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isUpcoming && result.scheduled_at ? (
+        <Countdown iso={result.scheduled_at} className="mt-2" />
+      ) : null}
+
+      {/* Finishers list (top 6) */}
       {finishers.length > 0 ? (
-        <div className="mt-4 flex-1 space-y-1.5">
-          {finishers.map((entry) => (
-            <div
-              key={entry.rank}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 ${
-                isFinal && entry.rank === 1 ? "bg-amber-500/10" : "bg-ink/60"
-              }`}
-            >
-              {/* Rank indicator */}
-              {isFinal && entry.rank <= 3 ? (
-                <span className="w-6 shrink-0 text-center text-lg leading-none">
-                  {MEDALS[entry.rank - 1]}
-                </span>
-              ) : (
-                <span className="w-6 shrink-0 text-center text-xs font-bold text-sand/50">
-                  #{entry.rank}
-                </span>
-              )}
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-cream">{entry.name}</p>
-                {entry.school ? (
-                  <p className="truncate text-xs text-sand">{entry.school}</p>
-                ) : null}
-              </div>
-
-              {entry.result ? (
-                <span className="shrink-0 text-sm font-semibold text-ember">
-                  {entry.result}
-                </span>
-              ) : null}
-            </div>
-          ))}
+        <div className="mt-4 flex-1">
+          <FinisherList finishers={finishers} isFinal={isFinal} />
         </div>
       ) : (
-        <p className="mt-4 flex-1 text-sm italic text-sand/60">Results pending…</p>
+        <p className="mt-4 flex-1 text-sm italic text-sand/60">
+          {isUpcoming ? "Yet to start" : "Results pending…"}
+        </p>
       )}
 
+      {/* Photo/video highlights */}
+      {media.length > 0 ? (
+        <MediaGallery media={media} className="mt-4 !grid-cols-1" />
+      ) : null}
+
+      {/* Point of contact */}
+      {result.poc_name || result.poc_phone ? (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-sand">
+          <Phone size={11} className="text-ember" />
+          {result.poc_name}
+          {result.poc_phone ? (
+            <a
+              href={`tel:${result.poc_phone.replace(/\s+/g, "")}`}
+              className="text-cream/90 underline-offset-2 hover:text-ember hover:underline"
+            >
+              {result.poc_phone}
+            </a>
+          ) : null}
+        </p>
+      ) : null}
+
       {/* Footer */}
-      <div className="mt-4 flex items-center justify-between text-xs text-sand/50">
-        {result.notes ? <span className="truncate">{result.notes}</span> : <span />}
-        <span className="shrink-0">Updated {relativeTime(result.updated_at)}</span>
+      {result.notes ? (
+        <p className="mt-3 truncate text-xs text-sand/50">{result.notes}</p>
+      ) : null}
+      <div className="mt-4 flex items-center justify-between gap-2 text-xs text-sand/50">
+        {isCompleted && finishers.length > 0 ? <ShareResultButton result={result} /> : <span />}
+        <span className="shrink-0" suppressHydrationWarning>
+          Updated {relativeTime(result.updated_at)}
+        </span>
       </div>
     </div>
   );

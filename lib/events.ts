@@ -97,6 +97,7 @@ export function normalizeEvent(row: Record<string, unknown>): EventItem {
     sort_order: typeof row.sort_order === "number" ? row.sort_order : 0,
     registration_url: (row.registration_url as string) ?? null,
     media: normalizeMedia(row.media),
+    live_tracking: row.live_tracking === true,
   };
 }
 

@@ -5,8 +5,8 @@ export default function AdminLiveLoading() {
   return (
     <div className="p-8">
       <AdminHeader
-        title="Live Results"
-        subtitle="Real-time results synced from Google Sheets."
+        title="Live Hub"
+        subtitle="Schedule, statuses, results and announcements for live-tracked events."
       />
       <SkeletonTable rows={8} />
     </div>
