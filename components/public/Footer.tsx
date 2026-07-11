@@ -1,8 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Mail, Phone, MapPin } from "lucide-react";
-import { CONTACT, NAV_LINKS, SITE } from "@/lib/constants";
+import { CONTACT, NAV_LINKS, SITE, SOCIAL, whatsappUrl } from "@/lib/constants";
 import { Container } from "@/components/ui/Section";
+import {
+  InstagramIcon,
+  YoutubeIcon,
+  FacebookIcon,
+  WhatsappIcon,
+} from "@/components/public/SocialIcons";
+
+// Only channels with a URL render — Facebook stays hidden until its URL is set
+// in lib/constants (SOCIAL.facebook).
+const SOCIAL_LINKS = [
+  { label: "Instagram", href: SOCIAL.instagram, Icon: InstagramIcon },
+  { label: "YouTube", href: SOCIAL.youtube, Icon: YoutubeIcon },
+  { label: "Facebook", href: SOCIAL.facebook, Icon: FacebookIcon },
+  { label: "WhatsApp", href: whatsappUrl(), Icon: WhatsappIcon },
+].filter((s) => s.href);
 
 export function Footer() {
   return (
@@ -21,6 +36,21 @@ export function Footer() {
               {SITE.description}
             </p>
             <p className="mt-4 eyebrow">{SITE.tagline}</p>
+
+            <div className="mt-6 flex items-center gap-3">
+              {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-sand/15 text-sand transition-colors hover:border-ember hover:text-ember"
+                >
+                  <Icon size={18} />
+                </a>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -77,7 +107,15 @@ export function Footer() {
             © {new Date().getFullYear()} {SITE.organiser}. All rights reserved.
           </p>
           <p>
-            {SITE.venue} · {SITE.dates}
+            Powered by{" "}
+            <a
+              href="https://connect2soft.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-sand transition-colors hover:text-ember"
+            >
+              Connect2Soft
+            </a>
           </p>
         </div>
       </Container>
