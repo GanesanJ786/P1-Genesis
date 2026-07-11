@@ -15,6 +15,7 @@ export const metadata: Metadata = {
   title: "The Event",
   description:
     "Genesis Track Fest 2026 — a two-day Junior & Senior Athletic Championship at Nehru Stadium, Coimbatore across six age categories.",
+  alternates: { canonical: `${SITE.url}/about-event` },
 };
 
 const SNAPSHOT = [

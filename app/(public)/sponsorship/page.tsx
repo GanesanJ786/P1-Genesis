@@ -4,7 +4,7 @@ import { PageHero } from "@/components/public/PageHero";
 import { SponsorTiers } from "@/components/public/SponsorTiers";
 import { Reveal } from "@/components/public/Reveal";
 import { ButtonLink } from "@/components/ui/Button";
-import { BRANDING_TOUCHPOINTS, SPONSOR_AUDIENCES } from "@/lib/constants";
+import { BRANDING_TOUCHPOINTS, SPONSOR_AUDIENCES, SITE } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   title: "Sponsorship",
   description:
     "Four headline sponsorship tiers plus supporter categories for Genesis Track Fest 2026, with 11 branding touchpoints across two days at Nehru Stadium.",
+  alternates: { canonical: `${SITE.url}/sponsorship` },
 };
 
 export default function SponsorshipPage() {
@@ -81,8 +82,17 @@ export default function SponsorshipPage() {
             ))}
           </div>
           <div className="mt-12 flex flex-wrap gap-4">
-            <ButtonLink href="/contact" size="lg">
+            <ButtonLink href="/contact?intent=sponsor" size="lg">
               Discuss a Partnership
+            </ButtonLink>
+            <ButtonLink
+              href={SITE.prospectusPath}
+              external
+              target="_blank"
+              size="lg"
+              variant="outline"
+            >
+              Download Prospectus
             </ButtonLink>
           </div>
         </Container>

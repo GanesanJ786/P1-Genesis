@@ -1,4 +1,5 @@
-import { SPONSOR_TIERS, SUPPORTER_TIERS } from "@/lib/constants";
+import { ArrowRight } from "lucide-react";
+import { SPONSOR_TIERS, SUPPORTER_TIERS, SITE } from "@/lib/constants";
 import { ButtonLink } from "@/components/ui/Button";
 import { Reveal } from "./Reveal";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,17 @@ export function SponsorTiers() {
                   {tier.name}
                 </h3>
               </div>
-              <p className="text-sm text-sand">{tier.blurb}</p>
+              <div>
+                <p className="text-sm text-sand">{tier.blurb}</p>
+                <ButtonLink
+                  href={`/contact?intent=sponsor&tier=${tier.key}`}
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 px-0"
+                >
+                  Enquire about this tier <ArrowRight size={14} />
+                </ButtonLink>
+              </div>
             </div>
           </Reveal>
         ))}
@@ -43,9 +54,20 @@ export function SponsorTiers() {
         </div>
       </div>
 
-      <ButtonLink href="/contact" size="lg">
-        Discuss a Partnership
-      </ButtonLink>
+      <div className="flex flex-wrap gap-4">
+        <ButtonLink href="/contact?intent=sponsor" size="lg">
+          Discuss a Partnership
+        </ButtonLink>
+        <ButtonLink
+          href={SITE.prospectusPath}
+          external
+          target="_blank"
+          variant="outline"
+          size="lg"
+        >
+          Download Prospectus
+        </ButtonLink>
+      </div>
     </div>
   );
 }

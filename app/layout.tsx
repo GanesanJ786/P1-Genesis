@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Anton, Inter } from "next/font/google";
 import "./globals.css";
-import { SITE, CONTACT } from "@/lib/constants";
+import { SITE, CONTACT, SOCIAL } from "@/lib/constants";
 import { JsonLd } from "@/components/ui/JsonLd";
 
 const anton = Anton({
@@ -100,11 +100,9 @@ const orgNode = {
   })),
   email: CONTACT.emails[0],
   // Social profiles — links the brand entity to its social presence in Google's
-  // knowledge graph. Add Facebook/other URLs here as they come online.
-  sameAs: [
-    "https://www.instagram.com/gsfteams/",
-    "https://www.youtube.com/channel/UCE290WpWD_QQIciL74Bk0vw",
-  ],
+  // knowledge graph. Derived from SOCIAL (lib/constants) so a profile appears
+  // here the moment its URL is filled in; empty entries are dropped.
+  sameAs: Object.values(SOCIAL).filter(Boolean),
 };
 
 const websiteNode = {

@@ -3,8 +3,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { contactSchema } from "@/lib/validations";
+import { ENQUIRY_TYPES } from "@/lib/constants";
 
 export type ContactResult = { ok: boolean; error?: string };
+
+/** Human label for an enquiry-type value (falls back gracefully). */
+function enquiryLabel(value: string | undefined): string {
+  return (
+    ENQUIRY_TYPES.find((t) => t.value === value)?.label ?? "General enquiry"
+  );
+}
 
 /**
  * Internal recipients notified on every contact submission. Kept server-side
@@ -100,6 +108,7 @@ export async function submitContact(
     name: formData.get("name"),
     email: formData.get("email"),
     phone: formData.get("phone") ?? "",
+    enquiryType: formData.get("enquiryType") ?? "",
     message: formData.get("message"),
   });
 
@@ -107,11 +116,15 @@ export async function submitContact(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
+  // Fold the enquiry category into the stored message so the team can triage it
+  // in the admin panel without a schema change (contact_submissions has no
+  // dedicated column). It's also surfaced in the notification email subject.
+  const label = enquiryLabel(parsed.data.enquiryType);
   const submission = {
     name: parsed.data.name,
     email: parsed.data.email,
     phone: parsed.data.phone || null,
-    message: parsed.data.message,
+    message: `[${label}]\n\n${parsed.data.message}`,
   };
 
   if (!isSupabaseConfigured) {

@@ -125,6 +125,10 @@ export const contactSchema = z.object({
   name: z.string().min(2, "Please enter your name").max(120),
   email: z.string().email("Enter a valid email"),
   phone: z.string().max(40).optional().or(z.literal("")),
+  // Triage category (join / sponsor / media …). Optional + free-form-tolerant so
+  // an older cached form without the field still submits; the server maps an
+  // unknown/blank value to a readable label.
+  enquiryType: z.string().max(40).optional().or(z.literal("")),
   message: z.string().min(5, "Tell us a little more").max(2000),
 });
 export type ContactInput = z.infer<typeof contactSchema>;

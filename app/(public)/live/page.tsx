@@ -13,6 +13,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "Live Events",
   description: `Follow Genesis Sports Foundation events live — real-time schedule, results and announcements from ${SITE.venue} and beyond.`,
+  alternates: { canonical: `${SITE.url}/live` },
   openGraph: {
     title: "Live Events · Genesis Sports Foundation",
     description: "Real-time schedule, results and announcements as each event unfolds.",

@@ -5,9 +5,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { NAV_LINKS, SITE } from "@/lib/constants";
+import { NAV_LINKS, SITE, SOCIAL, whatsappUrl } from "@/lib/constants";
 import { ButtonLink } from "@/components/ui/Button";
+import {
+  InstagramIcon,
+  YoutubeIcon,
+  FacebookIcon,
+  WhatsappIcon,
+} from "@/components/public/SocialIcons";
 import { cn } from "@/lib/utils";
+
+// Only channels with a URL render (Facebook hidden until set in lib/constants).
+const SOCIAL_LINKS = [
+  { label: "Instagram", href: SOCIAL.instagram, Icon: InstagramIcon },
+  { label: "YouTube", href: SOCIAL.youtube, Icon: YoutubeIcon },
+  { label: "Facebook", href: SOCIAL.facebook, Icon: FacebookIcon },
+  { label: "WhatsApp", href: whatsappUrl(), Icon: WhatsappIcon },
+].filter((s) => s.href);
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -112,6 +126,21 @@ export function Navbar() {
             <ButtonLink href="/sponsorship" className="mt-2 w-full" size="md">
               Become a Sponsor
             </ButtonLink>
+
+            <div className="mt-4 flex items-center gap-3 px-3">
+              {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-sand/15 text-sand transition-colors hover:border-ember hover:text-ember"
+                >
+                  <Icon size={18} />
+                </a>
+              ))}
+            </div>
             <p className="mt-3 px-3 text-xs text-sand">{SITE.dates}</p>
           </div>
         </div>

@@ -86,9 +86,22 @@ export default async function EventDetailPage({
       : {}),
   };
 
+  // Matches the visual breadcrumb below so Google can render a breadcrumb trail
+  // in search results (Home › Events › <title>).
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE.url },
+      { "@type": "ListItem", position: 2, name: "Events", item: `${SITE.url}/events` },
+      { "@type": "ListItem", position: 3, name: event.title, item: eventUrl },
+    ],
+  };
+
   return (
     <article>
       <JsonLd data={eventSchema} />
+      <JsonLd data={breadcrumbSchema} />
       {/* Breadcrumb — pt-20/24 clears the fixed navbar */}
       <div className="border-b border-sand/10 bg-ink pt-20 sm:pt-24">
         <Container className="pb-3">
