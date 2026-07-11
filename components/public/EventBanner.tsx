@@ -85,6 +85,9 @@ function BannerCarousel({ banners }: { banners: Slide[] }) {
     Autoplay({ delay: 6000, stopOnInteraction: false, stopOnMouseEnter: true }),
   ]);
 
+  const navButton =
+    "rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember";
+
   return (
     <div className="relative">
       <div className="overflow-hidden" ref={emblaRef}>
@@ -97,20 +100,41 @@ function BannerCarousel({ banners }: { banners: Slide[] }) {
         </div>
       </div>
 
+      {/* Overlay side arrows on tablet/desktop, where the two-column promo leaves
+          room at the edges. On mobile the promo stacks into one column, so
+          centered side arrows land on top of the description — there we render
+          the controls in a row below instead (swipe works on touch regardless). */}
       <button
         onClick={() => emblaApi?.scrollPrev()}
         aria-label="Previous event"
-        className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember sm:left-4"
+        className={`absolute left-4 top-1/2 hidden -translate-y-1/2 sm:block ${navButton}`}
       >
         <ArrowLeft size={18} />
       </button>
       <button
         onClick={() => emblaApi?.scrollNext()}
         aria-label="Next event"
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-sand/30 bg-ink/70 p-2 text-cream backdrop-blur transition-colors hover:border-ember hover:text-ember sm:right-4"
+        className={`absolute right-4 top-1/2 hidden -translate-y-1/2 sm:block ${navButton}`}
       >
         <ArrowRight size={18} />
       </button>
+
+      <div className="mt-5 flex justify-center gap-4 sm:hidden">
+        <button
+          onClick={() => emblaApi?.scrollPrev()}
+          aria-label="Previous event"
+          className={navButton}
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <button
+          onClick={() => emblaApi?.scrollNext()}
+          aria-label="Next event"
+          className={navButton}
+        >
+          <ArrowRight size={18} />
+        </button>
+      </div>
     </div>
   );
 }

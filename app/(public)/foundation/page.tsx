@@ -5,6 +5,8 @@ import { PageHero } from "@/components/public/PageHero";
 import { StatCounter } from "@/components/public/StatCounter";
 import { FeatureBanner } from "@/components/public/FeatureBanner";
 import { Reveal } from "@/components/public/Reveal";
+import { ButtonLink } from "@/components/ui/Button";
+import { SITE, whatsappUrl } from "@/lib/constants";
 import {
   FOUNDATION_STATS,
   FOUNDATION_ACHIEVEMENTS,
@@ -21,6 +23,7 @@ export const metadata: Metadata = {
   title: "Foundation",
   description:
     "Genesis Sports Foundation has spent a decade turning raw talent into champions across five academy locations in and around Coimbatore.",
+  alternates: { canonical: `${SITE.url}/foundation` },
 };
 
 export default function FoundationPage() {
@@ -174,6 +177,32 @@ export default function FoundationPage() {
                 ))}
               </ul>
             </Reveal>
+          </div>
+        </Container>
+      </Section>
+
+      {/* Join the academy — the parent/athlete conversion point. */}
+      <Section className="border-t border-sand/10">
+        <Container>
+          <div className="rounded-3xl border border-ember/30 bg-gradient-to-br from-ember/10 to-ink-soft p-8 text-center sm:p-12">
+            <p className="eyebrow mb-3">Train With Us</p>
+            <h2 className="mx-auto max-w-2xl font-display text-3xl uppercase leading-tight text-cream sm:text-4xl">
+              Join the Genesis Athletics Academy
+            </h2>
+            <p className="mx-auto mt-5 max-w-2xl text-sand">
+              Coaching for every level — from young beginners taking their first
+              strides to competitive athletes chasing state and national medals.
+              Sessions run across five locations in and around Coimbatore. Reach
+              out and we&apos;ll help you find the right starting point.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+              <ButtonLink href="/contact?intent=join" size="lg">
+                Enrol / Enquire
+              </ButtonLink>
+              <ButtonLink href={whatsappUrl()} external target="_blank" size="lg" variant="outline">
+                Chat on WhatsApp
+              </ButtonLink>
+            </div>
           </div>
         </Container>
       </Section>

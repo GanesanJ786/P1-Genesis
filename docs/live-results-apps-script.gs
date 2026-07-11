@@ -71,7 +71,7 @@ const COLS = {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("⚡ Live Site")
-    .addItem("Send now", "sendToSite")
+    .addItem("Send now", "sendNow")
     .addSeparator()
     .addItem("Turn ON auto-send", "installTrigger")
     .addItem("Turn OFF auto-send", "removeTriggers")
@@ -80,10 +80,17 @@ function onOpen() {
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 
-function sendToSite() {
+// Menu "Send now" — a manual push that shows a confirmation popup.
+function sendNow() {
+  sendToSite(true);
+}
+
+// interactive=true shows popups (manual send); auto-send stays silent so it
+// doesn't interrupt data entry on every edit.
+function sendToSite(interactive) {
   const results = buildPayload();
   if (results.length === 0) {
-    maybeAlert('Nothing to send — no rows found on "' + SHEET_NAME + '".');
+    if (interactive) maybeAlert('Nothing to send — no rows found on "' + SHEET_NAME + '".');
     return;
   }
   const res = UrlFetchApp.fetch(WEBHOOK_URL, {
@@ -95,9 +102,11 @@ function sendToSite() {
   });
   const code = res.getResponseCode();
   if (code === 200) {
-    maybeAlert("Sent " + results.length + " events to the live site. ✅");
-  } else {
+    if (interactive) maybeAlert("Sent " + results.length + " events to the live site. ✅");
+  } else if (interactive) {
     maybeAlert("Send failed (HTTP " + code + "): " + res.getContentText());
+  } else {
+    Logger.log("Auto-send failed (HTTP " + code + "): " + res.getContentText());
   }
 }
 
@@ -243,7 +252,7 @@ function removeTriggers() {
 
 function onEditHandler(e) {
   if (e && e.range && e.range.getSheet().getName() !== SHEET_NAME) return;
-  sendToSite();
+  sendToSite(false); // silent — no popup on every edit
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */

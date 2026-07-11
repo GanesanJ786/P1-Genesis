@@ -6,6 +6,7 @@ import { EventCard } from "@/components/public/EventCard";
 import { getPublishedEvents } from "@/lib/queries";
 import { splitEvents } from "@/lib/events";
 import { cardGridClass } from "@/lib/utils";
+import { SITE } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
   title: "Events",
   description:
     "Upcoming Genesis events to register for, and a record of our successful past meets and championships.",
+  alternates: { canonical: `${SITE.url}/events` },
 };
 
 export default async function EventsPage() {

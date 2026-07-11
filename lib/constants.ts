@@ -24,6 +24,52 @@ export const CONTACT = {
 } as const;
 
 /**
+ * Social + messaging channels. Single source of truth for the footer/menu links
+ * AND the JSON-LD `sameAs` (only non-empty profile URLs are emitted — see
+ * app/layout.tsx). Fill in `facebook` once the page is live and it appears
+ * everywhere automatically; add more platforms as new keys.
+ */
+export const SOCIAL = {
+  instagram: "https://www.instagram.com/gsfteams/",
+  youtube: "https://www.youtube.com/channel/UCE290WpWD_QQIciL74Bk0vw",
+  facebook: "", // TODO: add the Facebook page URL when it goes live
+} as const;
+
+/**
+ * WhatsApp click-to-chat — the primary inbound channel for parents. `number` is
+ * E.164 without the leading "+"; `message` is the default prefilled text.
+ * Defaults to the foundation's first contact line (93630 69793) — swap here if a
+ * dedicated WhatsApp Business line is set up.
+ */
+export const WHATSAPP = {
+  number: "919363069793",
+  message:
+    "Hi Genesis Sports Foundation, I'd like to know more about joining the athletics academy.",
+} as const;
+
+/** Build a wa.me click-to-chat URL, optionally overriding the default message. */
+export function whatsappUrl(message: string = WHATSAPP.message): string {
+  return `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Enquiry categories for the contact form. The first is the default; the value
+ * is carried into the notification email subject and prepended to the stored
+ * message so the team can triage (join vs. sponsor vs. media) without a schema
+ * change. Keys also match the `?intent=` param used to deep-link the form.
+ */
+export const ENQUIRY_TYPES = [
+  { value: "join", label: "Joining the academy" },
+  { value: "sponsor", label: "Sponsorship / partnership" },
+  { value: "schools", label: "Schools / bulk registration" },
+  { value: "media", label: "Media / press" },
+  { value: "volunteer", label: "Volunteering" },
+  { value: "other", label: "Something else" },
+] as const;
+
+export type EnquiryType = (typeof ENQUIRY_TYPES)[number]["value"];
+
+/**
  * Hero kinetic verbs ("Run · Jump · Throw · Grow"). `accent: true` renders in
  * the ember accent colour; all other styling is CSS-driven (see globals.css).
  * Edit/reorder freely — the hero re-renders responsively with no image assets.

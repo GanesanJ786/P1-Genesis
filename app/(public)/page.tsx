@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { getContent, getPublishedEvents, getTeam, getSlides } from "@/lib/queries";
 import { splitEvents } from "@/lib/events";
 import { FOUNDATION_STATS } from "@/lib/seed-data";
-import { SPONSOR_AUDIENCES } from "@/lib/constants";
+import { SPONSOR_AUDIENCES, SITE } from "@/lib/constants";
 import { cardGridClass } from "@/lib/utils";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import { ButtonLink } from "@/components/ui/Button";
@@ -19,6 +20,12 @@ import { Reveal } from "@/components/public/Reveal";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
+
+// Self-referencing canonical for the homepage (title/description inherit the
+// site defaults from the root layout).
+export const metadata: Metadata = {
+  alternates: { canonical: SITE.url },
+};
 
 export default async function HomePage() {
   const [

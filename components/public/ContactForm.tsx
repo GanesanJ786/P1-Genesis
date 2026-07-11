@@ -4,15 +4,26 @@ import { useActionState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { submitContact, type ContactResult } from "@/lib/actions/contact";
 import { Button } from "@/components/ui/Button";
+import { ENQUIRY_TYPES } from "@/lib/constants";
 
 const inputClass =
   "w-full rounded-lg border border-sand/20 bg-ink px-4 py-3 text-cream placeholder:text-sand/50 focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember";
 
-export function ContactForm() {
+export function ContactForm({
+  defaultEnquiry,
+  defaultMessage,
+}: {
+  defaultEnquiry?: string;
+  defaultMessage?: string;
+}) {
   const [state, formAction, pending] = useActionState<
     ContactResult | null,
     FormData
   >(submitContact, null);
+
+  const initialEnquiry =
+    ENQUIRY_TYPES.find((t) => t.value === defaultEnquiry)?.value ??
+    ENQUIRY_TYPES[0].value;
 
   if (state?.ok) {
     return (
@@ -30,6 +41,23 @@ export function ContactForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      <div>
+        <label htmlFor="enquiryType" className="mb-1.5 block text-xs uppercase tracking-widest text-sand">
+          I&apos;m reaching out about
+        </label>
+        <select
+          id="enquiryType"
+          name="enquiryType"
+          defaultValue={initialEnquiry}
+          className={inputClass}
+        >
+          {ENQUIRY_TYPES.map((t) => (
+            <option key={t.value} value={t.value} className="bg-ink text-cream">
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className="mb-1.5 block text-xs uppercase tracking-widest text-sand">
@@ -41,7 +69,7 @@ export function ContactForm() {
           <label htmlFor="email" className="mb-1.5 block text-xs uppercase tracking-widest text-sand">
             Email
           </label>
-          <input id="email" name="email" type="email" required className={inputClass} placeholder="you@company.com" />
+          <input id="email" name="email" type="email" required className={inputClass} placeholder="you@example.com" />
         </div>
       </div>
       <div>
@@ -59,6 +87,7 @@ export function ContactForm() {
           name="message"
           required
           rows={5}
+          defaultValue={defaultMessage}
           className={inputClass}
           placeholder="Tell us how you'd like to be involved with Genesis Sports Foundation..."
         />

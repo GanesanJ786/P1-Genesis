@@ -6,6 +6,7 @@ import { PageHero } from "@/components/public/PageHero";
 import { FeatureBanner } from "@/components/public/FeatureBanner";
 import { Reveal } from "@/components/public/Reveal";
 import { FOUNDATION_ACHIEVEMENTS } from "@/lib/seed-data";
+import { SITE } from "@/lib/constants";
 
 // Cache for 1 hour; admin edits revalidate instantly via revalidatePath.
 export const revalidate = 3600;
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
   title: "Achievements & Highlights",
   description:
     "Moments that define Genesis Sports Foundation — championship wins, medal ceremonies, and a decade of producing athletes.",
+  alternates: { canonical: `${SITE.url}/achievements` },
 };
 
 export default function AchievementsPage() {
