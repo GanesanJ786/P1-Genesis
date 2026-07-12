@@ -84,17 +84,21 @@ function mergeAnnouncements(
   return [...polled, ...tooNewForCache];
 }
 
-/* ── Event grouping ───────────────────────────────────────────────────────── */
-// An "event" in athletics = Discipline · Age group · Gender (e.g. "100m · U-14
-// · Boys"); its rounds are the heats/semis/final. Grouping turns a long flat
-// wall of cards into a scannable programme so spectators find their race fast.
+/* ── Programme grouping ───────────────────────────────────────────────────── */
+// The full programme is nested Category (age group) → Gender → Event
+// (discipline, e.g. "100M") → Round (heats/semis/final). Nesting it this way
+// — rather than one flat wall of "100m · U-14 · Boys"-style cards — lets a
+// spectator narrow down by eye (find their age group, then their gender,
+// then their event) instead of reading every card's compound title.
 
 type EventGroup = {
   key: string;
-  title: string;
+  title: string; // just the event/discipline name — category & gender are shown by parent headers
   rounds: LiveRow[];
   hasLive: boolean;
 };
+type GenderGroup = { key: string; gender: string; events: EventGroup[]; hasLive: boolean };
+type CategoryGroup = { key: string; category: string; genders: GenderGroup[]; hasLive: boolean };
 
 /** Round progression order within an event: heats → quarters → semis → final. */
 function roundRank(heat: string | null): number {
@@ -106,31 +110,85 @@ function roundRank(heat: string | null): number {
   return 4;
 }
 
-function groupByEvent(rows: LiveRow[]): EventGroup[] {
-  const map = new Map<string, EventGroup>();
+/** Leading number in an event/discipline name ("100M" -> 100, "60M" -> 60);
+ *  non-numeric events (Long Jump, Shot Put, ...) sort after all track events. */
+function eventSortKey(name: string): number {
+  const m = /^(\d+(?:\.\d+)?)/.exec(name.trim());
+  return m ? Number(m[1]) : Infinity;
+}
+
+/** Any number found in a category label ("U-14" -> 14, "BOYS10" -> 10);
+ *  age-unrestricted categories ("Open", with no digits) sort last. */
+function categorySortKey(category: string): number {
+  const m = /(\d+)/.exec(category);
+  return m ? Number(m[1]) : Infinity;
+}
+
+function genderSortKey(gender: string): number {
+  const g = gender.trim().toLowerCase();
+  if (g === "boys" || g === "men" || g === "male") return 0;
+  if (g === "girls" || g === "women" || g === "female") return 1;
+  return 2;
+}
+
+function buildProgramme(rows: LiveRow[]): CategoryGroup[] {
+  const catMap = new Map<string, Map<string, Map<string, EventGroup>>>();
   for (const r of rows) {
-    const discipline = (r.event_type || r.event_name || "").trim();
-    const parts = [discipline, r.category, r.gender].filter(Boolean) as string[];
-    const key = parts.join(" · ").toLowerCase();
-    let g = map.get(key);
+    const category = (r.category || "Uncategorized").trim() || "Uncategorized";
+    const gender = (r.gender || "Mixed").trim() || "Mixed";
+    const discipline = (r.event_type || r.event_name || "Event").trim() || "Event";
+    const eventKey = discipline.toLowerCase();
+
+    let genderMap = catMap.get(category);
+    if (!genderMap) { genderMap = new Map(); catMap.set(category, genderMap); }
+    let eventMap = genderMap.get(gender);
+    if (!eventMap) { eventMap = new Map(); genderMap.set(gender, eventMap); }
+    let g = eventMap.get(eventKey);
     if (!g) {
-      g = { key, title: parts.join(" · "), rounds: [], hasLive: false };
-      map.set(key, g);
+      g = { key: `${category}|${gender}|${eventKey}`, title: discipline, rounds: [], hasLive: false };
+      eventMap.set(eventKey, g);
     }
     g.rounds.push(r);
     if (r.status === "in_progress" || r.status === "paused") g.hasLive = true;
   }
-  const groups = [...map.values()];
-  for (const g of groups) {
-    g.rounds.sort(
-      (a, b) =>
-        a.day - b.day ||
-        roundRank(a.heat_label) - roundRank(b.heat_label) ||
-        a.sort_order - b.sort_order,
+
+  const categories: CategoryGroup[] = [];
+  for (const [category, genderMap] of catMap) {
+    const genders: GenderGroup[] = [];
+    for (const [gender, eventMap] of genderMap) {
+      const events = [...eventMap.values()];
+      for (const g of events) {
+        g.rounds.sort(
+          (a, b) =>
+            a.day - b.day ||
+            roundRank(a.heat_label) - roundRank(b.heat_label) ||
+            a.sort_order - b.sort_order,
+        );
+      }
+      events.sort(
+        (a, b) => eventSortKey(a.title) - eventSortKey(b.title) || a.title.localeCompare(b.title),
+      );
+      genders.push({
+        key: `${category}|${gender}`,
+        gender,
+        events,
+        hasLive: events.some((e) => e.hasLive),
+      });
+    }
+    genders.sort(
+      (a, b) => genderSortKey(a.gender) - genderSortKey(b.gender) || a.gender.localeCompare(b.gender),
     );
+    categories.push({
+      key: category,
+      category,
+      genders,
+      hasLive: genders.some((g) => g.hasLive),
+    });
   }
-  groups.sort((a, b) => scheduleComparator(a.rounds[0], b.rounds[0]));
-  return groups;
+  categories.sort(
+    (a, b) => categorySortKey(a.category) - categorySortKey(b.category) || a.category.localeCompare(b.category),
+  );
+  return categories;
 }
 
 /** Free-text match across event metadata and every finisher (name/school/bib). */
@@ -267,6 +325,9 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
   // races the live update and the value visibly flickers old→new→old.
   const realtimeConnected = useRef(false);
+  // Bumped on tab focus/visibility regain to force the Realtime effect below
+  // to tear down and rebuild the channel — see the effect for why.
+  const [reconnectKey, setReconnectKey] = useState(0);
 
   /* ── Supabase Realtime ─────────────────────────────────────────────────── */
   // One channel (= one WebSocket) with per-table bindings. INSERT/UPDATE are
@@ -339,14 +400,19 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
       realtimeConnected.current = false;
       supabase.removeChannel(channel);
     };
-  }, [event.id]);
+    // reconnectKey: browsers can freeze or silently drop the WebSocket while
+    // this tab is backgrounded (switching tabs, phone lock, laptop sleep)
+    // without ever firing a new subscribe status — the channel looks
+    // "SUBSCRIBED" forever but stops receiving events. Rebuilding the channel
+    // on focus/visibility regain (see the effect below) is the only reliable
+    // way to recover instead of waiting for a manual reload.
+  }, [event.id, reconnectKey]);
 
   /* ── Polling fallback — only runs while Realtime is *not* connected, so it
         never fights a live update (handles viewers beyond the connection
         limit or with Realtime blocked). ────────────────────────────────────── */
   useEffect(() => {
-    const id = setInterval(async () => {
-      if (realtimeConnected.current) return; // Realtime healthy → no poll needed
+    const poll = async () => {
       try {
         const res = await fetch(`/api/live/${event.slug}`);
         if (res.ok) {
@@ -359,9 +425,41 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
           setLastUpdated(new Date());
         }
       } catch { /* silent */ }
+    };
+
+    const id = setInterval(() => {
+      if (realtimeConnected.current) return; // Realtime healthy → no poll needed
+      poll();
     }, 10_000);
-    return () => clearInterval(id);
+
+    // On regaining focus/visibility, don't trust realtimeConnected — a
+    // backgrounded tab's WebSocket may be a silent zombie. Poll immediately
+    // for an instant catch-up (this is what a manual reload was providing)
+    // while the sibling effect above rebuilds the channel for the next update.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [event.slug]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setReconnectKey((k) => k + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
 
   /* ── Derived data ─────────────────────────────────────────────────────── */
   const days = useMemo(
@@ -439,10 +537,9 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
 
   const medalTally = useMemo(() => computeMedalTally(items), [items]);
 
-  // Group the filtered set into events (Discipline · Age · Gender), each with
-  // its rounds — a scannable programme instead of a flat wall of cards. The
-  // status filter narrows which rounds get grouped.
-  const groups = useMemo(() => {
+  // Build the nested Category → Gender → Event → Round programme from the
+  // filtered set. The status filter narrows which rounds get grouped.
+  const programme = useMemo(() => {
     const set =
       activeStatus === "upcoming"
         ? filtered.filter((r) => r.status === "upcoming")
@@ -457,8 +554,17 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                   (r) => isFinalHeat(r.heat_label) && r.status === "completed",
                 )
               : filtered;
-    return groupByEvent(set);
+    return buildProgramme(set);
   }, [filtered, activeStatus]);
+
+  const totalEventCount = useMemo(
+    () =>
+      programme.reduce(
+        (sum, cat) => sum + cat.genders.reduce((s, g) => s + g.events.length, 0),
+        0,
+      ),
+    [programme],
+  );
 
   // Search across athletes / bibs / schools / events — the fastest way for a
   // parent to find one race in a meet with hundreds of rounds.
@@ -478,7 +584,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
 
   const hasAnyData = items.length > 0;
   const nothingMatches =
-    groups.length === 0 && (activeStatus !== "all" || allRunning.length === 0);
+    totalEventCount === 0 && (activeStatus !== "all" || allRunning.length === 0);
 
   return (
     <div className="space-y-8">
@@ -661,7 +767,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </div>
               ) : null}
 
-              {activeStatus === "finals" && groups.length > 0 ? (
+              {activeStatus === "finals" && totalEventCount > 0 ? (
                 <button
                   type="button"
                   onClick={downloadAllFinals}
@@ -677,15 +783,47 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </button>
               ) : null}
 
-              {groups.length > 0 ? (
-                <div className="space-y-4">
-                  {groups.map((g) => (
-                    <EventGroupSection
-                      key={g.key}
-                      group={g}
-                      eventTitle={event.title}
-                      defaultOpen={activeStatus === "finals" ? true : undefined}
-                    />
+              {/* Programme: Category → Gender → Event → Round, each level
+                  sorted ascending (age/distance-aware) so the order matches
+                  how a spectator naturally scans a printed heat sheet. */}
+              {programme.length > 0 ? (
+                <div className="space-y-8">
+                  {programme.map((cat) => (
+                    <div key={cat.key} className="space-y-4">
+                      <div className="flex items-center gap-2.5 border-b border-sand/15 pb-2">
+                        <h2 className="font-display text-xl uppercase tracking-wide text-cream sm:text-2xl">
+                          {cat.category}
+                        </h2>
+                        {cat.hasLive ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-600/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-white">
+                            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                            Live
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="space-y-5">
+                        {cat.genders.map((g) => (
+                          <div key={g.key} className="space-y-3">
+                            <h3 className="eyebrow flex items-center gap-2 text-ember">
+                              {g.gender}
+                              {g.hasLive ? (
+                                <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                              ) : null}
+                            </h3>
+                            <div className="space-y-3">
+                              {g.events.map((ev) => (
+                                <EventGroupSection
+                                  key={ev.key}
+                                  group={ev}
+                                  eventTitle={event.title}
+                                  defaultOpen={activeStatus === "finals" ? true : undefined}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : null}
