@@ -64,15 +64,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { results?: LiveResultPayload[]; event_slug?: string | null };
+  let body: {
+    results?: LiveResultPayload[];
+    event_slug?: string | null;
+    /** Event Keys the sheet no longer has (row deleted) — mirror as deletes. */
+    deleted_keys?: string[];
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const rows = body.results;
-  if (!Array.isArray(rows) || rows.length === 0) {
+  const rows = Array.isArray(body.results) ? body.results : [];
+  const deletedKeys = Array.isArray(body.deleted_keys)
+    ? body.deleted_keys.filter((k): k is string => typeof k === "string" && k.length > 0)
+    : [];
+  if (rows.length === 0 && deletedKeys.length === 0) {
     return NextResponse.json({ error: "No results provided" }, { status: 400 });
   }
 
@@ -152,27 +160,61 @@ export async function POST(req: NextRequest) {
   });
 
   const touchedSlugs = new Set<string>();
-  const fullRows = [];
-  for (const r of rows) {
-    const event = await resolveEvent(r);
-    if (event) touchedSlugs.add(event.slug);
-    fullRows.push(fullPayload(r, event));
-  }
 
-  let { error } = await supabase
-    .from("live_results")
-    .upsert(fullRows, { onConflict: "event_key" });
+  if (rows.length > 0) {
+    const fullRows = [];
+    for (const r of rows) {
+      const event = await resolveEvent(r);
+      if (event) touchedSlugs.add(event.slug);
+      fullRows.push(fullPayload(r, event));
+    }
 
-  // DB not migrated to 0006 yet → retry with the legacy column set so the
-  // sheet pipeline never goes down.
-  if (error && isMissingColumnError(error)) {
-    ({ error } = await supabase
+    let { error } = await supabase
       .from("live_results")
-      .upsert(rows.map(legacyPayload), { onConflict: "event_key" }));
+      .upsert(fullRows, { onConflict: "event_key" });
+
+    // DB not migrated to 0006 yet → retry with the legacy column set so the
+    // sheet pipeline never goes down.
+    if (error && isMissingColumnError(error)) {
+      ({ error } = await supabase
+        .from("live_results")
+        .upsert(rows.map(legacyPayload), { onConflict: "event_key" }));
+    }
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Rows the sheet no longer has (deleted by the owner). Deleting by exact
+  // Event Key — never by "anything not in this push" — so this can only ever
+  // remove a race the sheet itself previously created; admin-only rows
+  // (`/admin/live`, no matching sheet row) are never touched.
+  if (deletedKeys.length > 0) {
+    const { data: toDelete } = await supabase
+      .from("live_results")
+      .select("event_id")
+      .in("event_key", deletedKeys);
+
+    const { error: delError } = await supabase
+      .from("live_results")
+      .delete()
+      .in("event_key", deletedKeys);
+
+    if (delError) {
+      return NextResponse.json({ error: delError.message }, { status: 500 });
+    }
+
+    const deletedEventIds = [
+      ...new Set((toDelete ?? []).map((r) => r.event_id).filter((id): id is string => Boolean(id))),
+    ];
+    if (deletedEventIds.length > 0) {
+      const { data: evs } = await supabase
+        .from("events")
+        .select("slug")
+        .in("id", deletedEventIds);
+      evs?.forEach((e) => touchedSlugs.add(e.slug));
+    }
   }
 
   revalidatePath("/live");
