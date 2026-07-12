@@ -40,6 +40,11 @@ const HEADER_ROW = 1;         // row number containing the column headers
 // live-tracked event (fine while you run one event at a time).
 const EVENT_SLUG = "";
 
+// Document property key used to remember which Event Keys were included in
+// the last successful send, so a row's disappearance (deleted from the
+// sheet) can be detected and mirrored as a delete on the live site.
+const LAST_KEYS_PROP = "last_pushed_event_keys";
+
 // Map our fields → the exact header text in the sheet (from the template).
 const COLS = {
   event_key: "Event Key",
@@ -76,6 +81,17 @@ function onOpen() {
     .addItem("Turn ON auto-send", "installTrigger")
     .addItem("Turn OFF auto-send", "removeTriggers")
     .addToUi();
+
+  // Defined in docs/quick-entry-apps-script.gs — a second file in this same
+  // Apps Script project (see that file's header for setup instructions).
+  SpreadsheetApp.getUi()
+    .createMenu("📋 Quick Entry")
+    .addItem("1. Generate category sheets from Roster", "generateCategoryTabs")
+    .addItem("2. Re-sync Upcoming schedule (usually automatic)", "publishSchedule")
+    .addItem("3. Push category sheets to Results & publish", "pushGroupTabsToResults")
+    .addSeparator()
+    .addItem("Upgrade existing sheets for Time/Started columns", "upgradeExistingCategorySheets")
+    .addToUi();
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
@@ -89,25 +105,63 @@ function sendNow() {
 // doesn't interrupt data entry on every edit.
 function sendToSite(interactive) {
   const results = buildPayload();
-  if (results.length === 0) {
+  const currentKeys = results.map(function (r) { return r.event_key; });
+  const deletedKeys = computeDeletedKeys(currentKeys);
+
+  if (results.length === 0 && deletedKeys.length === 0) {
     if (interactive) maybeAlert('Nothing to send — no rows found on "' + SHEET_NAME + '".');
     return;
   }
+
+  const payload = { results: results, event_slug: EVENT_SLUG || undefined };
+  if (deletedKeys.length) payload.deleted_keys = deletedKeys;
+
   const res = UrlFetchApp.fetch(WEBHOOK_URL, {
     method: "post",
     contentType: "application/json",
     headers: { "x-webhook-secret": WEBHOOK_SECRET },
-    payload: JSON.stringify({ results: results, event_slug: EVENT_SLUG || undefined }),
+    payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
   if (code === 200) {
-    if (interactive) maybeAlert("Sent " + results.length + " events to the live site. ✅");
+    // Only remember this as the new baseline once the site confirms it
+    // landed — a failed send must keep comparing against the last
+    // successful state so a deletion during an outage isn't lost.
+    storeLastPushedKeys(currentKeys);
+    if (interactive) {
+      var msg = "Sent " + results.length + " events to the live site.";
+      if (deletedKeys.length) msg += " Removed " + deletedKeys.length + " deleted race(s) from the live site.";
+      maybeAlert(msg + " ✅");
+    }
   } else if (interactive) {
     maybeAlert("Send failed (HTTP " + code + "): " + res.getContentText());
   } else {
     Logger.log("Auto-send failed (HTTP " + code + "): " + res.getContentText());
   }
+}
+
+// Rows present in the last successful send but missing from the current
+// sheet scan = races the user deleted from the sheet since then.
+function computeDeletedKeys(currentKeys) {
+  const prev = readLastPushedKeys();
+  if (prev.length === 0) return [];
+  const currentSet = {};
+  currentKeys.forEach(function (k) { currentSet[k] = true; });
+  return prev.filter(function (k) { return !currentSet[k]; });
+}
+function readLastPushedKeys() {
+  const raw = PropertiesService.getDocumentProperties().getProperty(LAST_KEYS_PROP);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+function storeLastPushedKeys(keys) {
+  PropertiesService.getDocumentProperties().setProperty(LAST_KEYS_PROP, JSON.stringify(keys));
 }
 
 /** Read the sheet and group rows into one payload per race. */
@@ -257,8 +311,14 @@ function onEditHandler(e) {
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
+// Last NON-BLANK value wins (not first) — a race can appear as more than one
+// row-group sharing the same Event Key (e.g. an "Upcoming" placeholder row
+// published before the race runs, then real finisher rows appended once it's
+// done); the later group's Status/etc. must be able to override the earlier
+// placeholder's. A group that doesn't repeat a field (leaves it blank) still
+// inherits the earlier value, since blank vals are never written.
 function setMeta(g, key, val) {
-  if ((g[key] === undefined || g[key] === "") && val !== "" && val !== null && val !== undefined) {
+  if (val !== "" && val !== null && val !== undefined) {
     g[key] = val;
   }
 }
