@@ -22,7 +22,7 @@ export function FinisherList({
   if (finishers.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      {finishers.map((entry) => {
+      {finishers.map((entry, i) => {
         const isMatch =
           highlight &&
           (entry.name.toLowerCase().includes(highlight) ||
@@ -30,7 +30,10 @@ export function FinisherList({
             (entry.bib ?? "").toLowerCase().includes(highlight));
         return (
           <div
-            key={entry.rank}
+            // rank alone isn't guaranteed unique — tied placings (a dead
+            // heat) legitimately share a rank — so fall back to bib, then
+            // array position, rather than assuming rank never repeats.
+            key={entry.bib ? `${entry.rank}-${entry.bib}` : `${entry.rank}-${i}`}
             className={`flex items-center gap-3 rounded-xl px-3 py-2 ${
               isMatch
                 ? "bg-ember/15 ring-1 ring-ember/40"
