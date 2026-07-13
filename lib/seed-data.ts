@@ -27,6 +27,8 @@ export type EventItem = {
   media: MediaItem[];
   /** Shown in the public Live Hub (/live) with realtime tracking. */
   live_tracking: boolean;
+  /** Whether the /live/[slug] "Schedule" timetable section is shown. */
+  show_schedule: boolean;
 };
 export type Slide = {
   id: string;
@@ -213,6 +215,7 @@ export const SEED_EVENTS: EventItem[] = [
     status: "published",
     sort_order: 1,
     live_tracking: false,
+    show_schedule: true,
     registration_url: "https://forms.gle/your-registration-form",
     media: [],
   },
@@ -229,6 +232,7 @@ export const SEED_EVENTS: EventItem[] = [
     status: "published",
     sort_order: 2,
     live_tracking: false,
+    show_schedule: true,
     registration_url: "https://forms.gle/your-registration-form",
     media: [],
   },
@@ -245,6 +249,7 @@ export const SEED_EVENTS: EventItem[] = [
     status: "published",
     sort_order: 3,
     live_tracking: false,
+    show_schedule: true,
     registration_url: "https://forms.gle/your-registration-form",
     media: [],
   },
@@ -262,6 +267,7 @@ export const SEED_EVENTS: EventItem[] = [
     status: "published",
     sort_order: 4,
     live_tracking: false,
+    show_schedule: true,
     registration_url: null,
     media: [
       {

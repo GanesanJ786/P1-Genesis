@@ -58,6 +58,7 @@ export async function saveEvent(
     ...raw,
     slug: raw.slug || slugify(raw.title ?? ""),
     live_tracking: raw.live_tracking === "on" || raw.live_tracking === "true",
+    show_schedule: raw.show_schedule === "on" || raw.show_schedule === "true",
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message };
@@ -77,14 +78,15 @@ export async function saveEvent(
     status: d.status,
     sort_order: d.sort_order,
   };
-  // The media/registration columns are added by migration 0003 and
-  // live_tracking by 0006. Include them, but if the DB hasn't been migrated
-  // yet, retry without them so editing events never breaks.
+  // The media/registration columns are added by migration 0003, live_tracking
+  // by 0006, and show_schedule by 0008. Include them, but if the DB hasn't
+  // been migrated yet, retry without them so editing events never breaks.
   const full: EventInsert = {
     ...base,
     registration_url: d.registration_url || null,
     media: parseMediaLinks(d.media_links),
     live_tracking: d.live_tracking,
+    show_schedule: d.show_schedule,
   };
 
   const save = (payload: EventInsert) =>

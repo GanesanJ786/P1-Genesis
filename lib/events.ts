@@ -98,6 +98,10 @@ export function normalizeEvent(row: Record<string, unknown>): EventItem {
     registration_url: (row.registration_url as string) ?? null,
     media: normalizeMedia(row.media),
     live_tracking: row.live_tracking === true,
+    // Opt-out feature (unlike live_tracking): defaults true so a database
+    // that hasn't run migration 0008 yet — or an event nobody has touched
+    // this checkbox on — still shows the Schedule section.
+    show_schedule: row.show_schedule !== false,
   };
 }
 

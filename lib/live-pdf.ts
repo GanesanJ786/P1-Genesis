@@ -2,6 +2,8 @@ import {
   parseFinishers,
   formatScheduledTime,
   isFinalHeat,
+  scheduleComparator,
+  LIVE_STATUS_LABELS,
   type LiveRow,
 } from "@/lib/live";
 import { slugify } from "@/lib/utils";
@@ -261,4 +263,69 @@ export async function downloadAllFinalsPdf(items: LiveRow[], eventTitle: string)
   }
 
   doc.save(`${slugify(eventTitle)}-all-finals.pdf`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Full schedule — every race regardless of status, time/event/venue/POC      */
+/* -------------------------------------------------------------------------- */
+
+const SCHEDULE_TABLE_HEAD = [["Time", "Event", "Category", "Round", "Status", "Venue", "POC"]];
+
+function scheduleRow(item: LiveRow): string[] {
+  const poc = [item.poc_name, item.poc_phone].filter(Boolean).join(" · ");
+  return [
+    item.scheduled_at ? formatScheduledTime(item.scheduled_at) : "TBA",
+    item.event_name,
+    [item.category, item.gender].filter(Boolean).join(" · "),
+    item.heat_label || "Final",
+    LIVE_STATUS_LABELS[item.status] ?? item.status,
+    item.venue || "-",
+    poc || "-",
+  ];
+}
+
+/** The full event timetable — usable and shareable before the meet starts, not
+ *  just a "what's next" list, so it deliberately includes every status. */
+export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string): Promise<void> {
+  const schedule = [...items].sort(scheduleComparator);
+  if (schedule.length === 0) return;
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  const bandH = await drawHeaderBand(doc, pageW, eventTitle, "SCHEDULE");
+
+  autoTable(doc, {
+    startY: bandH + 10,
+    head: SCHEDULE_TABLE_HEAD,
+    body: schedule.map(scheduleRow),
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
+    headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: STRIPE },
+    margin: { top: 16 },
+    columnStyles: {
+      0: { cellWidth: 16, halign: "center" },
+      3: { cellWidth: 16, halign: "center" },
+      4: { cellWidth: 20, halign: "center" },
+    },
+  });
+
+  const pages = doc.getNumberOfPages();
+  const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  for (let i = 1; i <= pages; i += 1) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(`${eventTitle} · Schedule · ${stamp}`, 14, pageH - 8);
+    doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
+      align: "right",
+    });
+  }
+
+  doc.save(`${slugify(eventTitle)}-schedule.pdf`);
 }

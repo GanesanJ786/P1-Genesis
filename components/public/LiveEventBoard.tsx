@@ -15,6 +15,7 @@ import { LiveRoundRow } from "@/components/public/LiveRoundRow";
 import { AnnouncementsFeed } from "@/components/public/AnnouncementsFeed";
 import { MedalTally } from "@/components/public/MedalTally";
 import { Countdown } from "@/components/public/Countdown";
+import { ScheduleTimeline } from "@/components/public/ScheduleTimeline";
 import {
   normalizeLiveItem,
   computeMedalTally,
@@ -26,7 +27,7 @@ import {
   type AnnouncementRow,
 } from "@/lib/live";
 
-type BoardEvent = { id: string; slug: string; title: string };
+type BoardEvent = { id: string; slug: string; title: string; showSchedule: boolean };
 type Props = {
   event: BoardEvent;
   initialItems: LiveRow[];
@@ -85,11 +86,13 @@ function mergeAnnouncements(
 }
 
 /* ── Programme grouping ───────────────────────────────────────────────────── */
-// The full programme is nested Category (age group) → Gender → Event
-// (discipline, e.g. "100M") → Round (heats/semis/final). Nesting it this way
-// — rather than one flat wall of "100m · U-14 · Boys"-style cards — lets a
-// spectator narrow down by eye (find their age group, then their gender,
-// then their event) instead of reading every card's compound title.
+// The full programme is nested Gender → Category (age group) → Event
+// (discipline, e.g. "100M") → Round (heats/semis/final) — all of Boys'
+// programme first, then all of Girls', each internally organised by age
+// group. Nesting it this way — rather than one flat wall of "100m · U-14 ·
+// Boys"-style cards — lets a spectator narrow down by eye (their gender,
+// then their age group, then their event) instead of reading every card's
+// compound title.
 
 type EventGroup = {
   key: string;
@@ -97,8 +100,22 @@ type EventGroup = {
   rounds: LiveRow[];
   hasLive: boolean;
 };
-type GenderGroup = { key: string; gender: string; events: EventGroup[]; hasLive: boolean };
-type CategoryGroup = { key: string; category: string; genders: GenderGroup[]; hasLive: boolean };
+type CategoryGroup = {
+  key: string;
+  category: string;
+  events: EventGroup[];
+  hasLive: boolean;
+  totalRounds: number;
+  doneRounds: number;
+};
+type GenderGroup = {
+  key: string;
+  gender: string;
+  categories: CategoryGroup[];
+  hasLive: boolean;
+  totalRounds: number;
+  doneRounds: number;
+};
 
 /** Round progression order within an event: heats → quarters → semis → final. */
 function roundRank(heat: string | null): number {
@@ -110,10 +127,28 @@ function roundRank(heat: string | null): number {
   return 4;
 }
 
+/** Numeric part of a round label ("Heat 4" -> 4, "Semifinal 2" -> 2) — every
+ *  heat/semifinal shares the same roundRank(), so without this they only
+ *  sort by day/sort_order, which ties for every Quick-Entry-pushed row
+ *  (sort_order is always 0) and left heats ordered by push time instead of
+ *  heat number (e.g. "Heat 1, Heat 4, Heat 7" — insertion order, not 1-2-3). */
+function roundNumber(heat: string | null): number {
+  const m = /(\d+)/.exec(heat || "");
+  return m ? Number(m[1]) : 0;
+}
+
+// Field events are sometimes named with a leading number that isn't a race
+// distance at all (e.g. "5M RUNNING LONG JUMP" = a short run-up long jump,
+// not a 5m dash) — checked first so those never get sorted in among actual
+// track distances just because the name happens to start with a digit.
+const FIELD_EVENT_KEYWORDS = /JUMP|THROW|PUT|SHOT|DISCUS|JAVELIN|CBT/i;
+
 /** Leading number in an event/discipline name ("100M" -> 100, "60M" -> 60);
- *  non-numeric events (Long Jump, Shot Put, ...) sort after all track events. */
+ *  field events (Long Jump, Shot Put, ...) always sort after all track events. */
 function eventSortKey(name: string): number {
-  const m = /^(\d+(?:\.\d+)?)/.exec(name.trim());
+  const trimmed = name.trim();
+  if (FIELD_EVENT_KEYWORDS.test(trimmed)) return Infinity;
+  const m = /^(\d+(?:\.\d+)?)/.exec(trimmed);
   return m ? Number(m[1]) : Infinity;
 }
 
@@ -131,64 +166,74 @@ function genderSortKey(gender: string): number {
   return 2;
 }
 
-function buildProgramme(rows: LiveRow[]): CategoryGroup[] {
-  const catMap = new Map<string, Map<string, Map<string, EventGroup>>>();
+function buildProgramme(rows: LiveRow[]): GenderGroup[] {
+  const genderMap = new Map<string, Map<string, Map<string, EventGroup>>>();
   for (const r of rows) {
-    const category = (r.category || "Uncategorized").trim() || "Uncategorized";
     const gender = (r.gender || "Mixed").trim() || "Mixed";
+    const category = (r.category || "Uncategorized").trim() || "Uncategorized";
     const discipline = (r.event_type || r.event_name || "Event").trim() || "Event";
     const eventKey = discipline.toLowerCase();
 
-    let genderMap = catMap.get(category);
-    if (!genderMap) { genderMap = new Map(); catMap.set(category, genderMap); }
-    let eventMap = genderMap.get(gender);
-    if (!eventMap) { eventMap = new Map(); genderMap.set(gender, eventMap); }
+    let catMap = genderMap.get(gender);
+    if (!catMap) { catMap = new Map(); genderMap.set(gender, catMap); }
+    let eventMap = catMap.get(category);
+    if (!eventMap) { eventMap = new Map(); catMap.set(category, eventMap); }
     let g = eventMap.get(eventKey);
     if (!g) {
-      g = { key: `${category}|${gender}|${eventKey}`, title: discipline, rounds: [], hasLive: false };
+      g = { key: `${gender}|${category}|${eventKey}`, title: discipline, rounds: [], hasLive: false };
       eventMap.set(eventKey, g);
     }
     g.rounds.push(r);
     if (r.status === "in_progress" || r.status === "paused") g.hasLive = true;
   }
 
-  const categories: CategoryGroup[] = [];
-  for (const [category, genderMap] of catMap) {
-    const genders: GenderGroup[] = [];
-    for (const [gender, eventMap] of genderMap) {
+  const genders: GenderGroup[] = [];
+  for (const [gender, catMap] of genderMap) {
+    const categories: CategoryGroup[] = [];
+    for (const [category, eventMap] of catMap) {
       const events = [...eventMap.values()];
       for (const g of events) {
         g.rounds.sort(
           (a, b) =>
             a.day - b.day ||
             roundRank(a.heat_label) - roundRank(b.heat_label) ||
+            roundNumber(a.heat_label) - roundNumber(b.heat_label) ||
             a.sort_order - b.sort_order,
         );
       }
       events.sort(
         (a, b) => eventSortKey(a.title) - eventSortKey(b.title) || a.title.localeCompare(b.title),
       );
-      genders.push({
-        key: `${category}|${gender}`,
-        gender,
+      const totalRounds = events.reduce((s, e) => s + e.rounds.length, 0);
+      const doneRounds = events.reduce(
+        (s, e) => s + e.rounds.filter((r) => r.status === "completed").length,
+        0,
+      );
+      categories.push({
+        key: `${gender}|${category}`,
+        category,
         events,
         hasLive: events.some((e) => e.hasLive),
+        totalRounds,
+        doneRounds,
       });
     }
-    genders.sort(
-      (a, b) => genderSortKey(a.gender) - genderSortKey(b.gender) || a.gender.localeCompare(b.gender),
+    categories.sort(
+      (a, b) => categorySortKey(a.category) - categorySortKey(b.category) || a.category.localeCompare(b.category),
     );
-    categories.push({
-      key: category,
-      category,
-      genders,
-      hasLive: genders.some((g) => g.hasLive),
+    genders.push({
+      key: gender,
+      gender,
+      categories,
+      hasLive: categories.some((c) => c.hasLive),
+      totalRounds: categories.reduce((s, c) => s + c.totalRounds, 0),
+      doneRounds: categories.reduce((s, c) => s + c.doneRounds, 0),
     });
   }
-  categories.sort(
-    (a, b) => categorySortKey(a.category) - categorySortKey(b.category) || a.category.localeCompare(b.category),
+  genders.sort(
+    (a, b) => genderSortKey(a.gender) - genderSortKey(b.gender) || a.gender.localeCompare(b.gender),
   );
-  return categories;
+  return genders;
 }
 
 /** Free-text match across event metadata and every finisher (name/school/bib). */
@@ -472,14 +517,30 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     [items, activeDay],
   );
 
-  const categories = useMemo(
-    () => Array.from(new Set(dayAll.map((r) => r.category).filter(Boolean))).sort(),
-    [dayAll],
-  );
+  // Same ordering as the programme itself (Boys' categories ascending, then
+  // Girls') — otherwise these chips drift out of sync with the list below
+  // them. A category's gender is looked up from its rows rather than parsed
+  // out of the label, so it works whether gender lives in the category name
+  // (e.g. "BOYS8") or is a separate field (older "U-14" + Boys/Girls rows).
+  const categories = useMemo(() => {
+    const genderByCategory = new Map<string, string>();
+    for (const r of dayAll) {
+      if (r.category && !genderByCategory.has(r.category)) {
+        genderByCategory.set(r.category, r.gender || "");
+      }
+    }
+    return Array.from(new Set(dayAll.map((r) => r.category).filter(Boolean))).sort((a, b) => {
+      const ga = genderSortKey(genderByCategory.get(a) || "");
+      const gb = genderSortKey(genderByCategory.get(b) || "");
+      return ga - gb || categorySortKey(a) - categorySortKey(b) || a.localeCompare(b);
+    });
+  }, [dayAll]);
 
   const genders = useMemo(
     () =>
-      Array.from(new Set(dayAll.map((r) => r.gender).filter(Boolean))).sort() as string[],
+      Array.from(new Set(dayAll.map((r) => r.gender).filter(Boolean))).sort(
+        (a, b) => genderSortKey(a as string) - genderSortKey(b as string) || (a as string).localeCompare(b as string),
+      ) as string[],
     [dayAll],
   );
 
@@ -488,9 +549,10 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     const pool = activeCategory
       ? dayAll.filter((r) => r.category === activeCategory)
       : dayAll;
-    return Array.from(
-      new Set(pool.map((r) => r.event_type).filter(Boolean)),
-    ).sort() as string[];
+    return Array.from(new Set(pool.map((r) => r.event_type).filter(Boolean))).sort(
+      (a, b) =>
+        eventSortKey(a as string) - eventSortKey(b as string) || (a as string).localeCompare(b as string),
+    ) as string[];
   }, [dayAll, activeCategory]);
 
   const handleCategoryChange = (cat: string | null) => {
@@ -560,7 +622,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   const totalEventCount = useMemo(
     () =>
       programme.reduce(
-        (sum, cat) => sum + cat.genders.reduce((s, g) => s + g.events.length, 0),
+        (sum, g) => sum + g.categories.reduce((s, cat) => s + cat.events.length, 0),
         0,
       ),
     [programme],
@@ -651,6 +713,10 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
               </span>
               <Countdown iso={nextUp.scheduled_at!} />
             </div>
+          ) : null}
+
+          {!q && event.showSchedule ? (
+            <ScheduleTimeline items={items} eventTitle={event.title} />
           ) : null}
 
           {/* Sticky controls: search (always) + status (when browsing) */}
@@ -785,46 +851,80 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
 
               {/* Programme: Category → Gender → Event → Round, each level
                   sorted ascending (age/distance-aware) so the order matches
-                  how a spectator naturally scans a printed heat sheet. */}
+                  how a spectator naturally scans a printed heat sheet.
+                  Category and Gender are collapsible (like Event already
+                  was) and auto-collapse once fully done — keeps a long
+                  multi-category meet from becoming an endless scroll once
+                  earlier age groups have finished. */}
               {programme.length > 0 ? (
-                <div className="space-y-8">
-                  {programme.map((cat) => (
-                    <div key={cat.key} className="space-y-4">
-                      <div className="flex items-center gap-2.5 border-b border-sand/15 pb-2">
-                        <h2 className="font-display text-xl uppercase tracking-wide text-cream sm:text-2xl">
-                          {cat.category}
-                        </h2>
-                        {cat.hasLive ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-600/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-white">
-                            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                            Live
+                <div className="space-y-4">
+                  {programme.map((g) => {
+                    const genderDone = g.totalRounds > 0 && g.doneRounds === g.totalRounds;
+                    return (
+                      <details
+                        key={g.key}
+                        open={activeStatus === "finals" ? true : !genderDone}
+                        className="group/gender overflow-hidden rounded-3xl border border-sand/15 bg-ink-soft/20"
+                      >
+                        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3.5 hover:bg-white/[0.02] [&::-webkit-details-marker]:hidden sm:px-5">
+                          <ChevronRight
+                            size={18}
+                            className="shrink-0 text-sand/50 transition-transform group-open/gender:rotate-90"
+                          />
+                          <h2 className="min-w-0 truncate font-display text-xl uppercase tracking-wide text-cream sm:text-2xl">
+                            {g.gender}
+                          </h2>
+                          {g.hasLive ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-600/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-white">
+                              <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                              Live
+                            </span>
+                          ) : null}
+                          <span className="ml-auto shrink-0 text-xs text-sand/50">
+                            {g.doneRounds}/{g.totalRounds} done
                           </span>
-                        ) : null}
-                      </div>
-                      <div className="space-y-5">
-                        {cat.genders.map((g) => (
-                          <div key={g.key} className="space-y-3">
-                            <h3 className="eyebrow flex items-center gap-2 text-ember">
-                              {g.gender}
-                              {g.hasLive ? (
-                                <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                              ) : null}
-                            </h3>
-                            <div className="space-y-3">
-                              {g.events.map((ev) => (
-                                <EventGroupSection
-                                  key={ev.key}
-                                  group={ev}
-                                  eventTitle={event.title}
-                                  defaultOpen={activeStatus === "finals" ? true : undefined}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                        </summary>
+                        <div className="space-y-5 border-t border-sand/10 px-4 pb-5 pt-4 sm:px-5">
+                          {g.categories.map((cat) => {
+                            const catDone = cat.totalRounds > 0 && cat.doneRounds === cat.totalRounds;
+                            return (
+                              <details
+                                key={cat.key}
+                                open={activeStatus === "finals" ? true : !catDone}
+                                className="group/category"
+                              >
+                                <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden">
+                                  <ChevronRight
+                                    size={14}
+                                    className="shrink-0 text-sand/40 transition-transform group-open/category:rotate-90"
+                                  />
+                                  <h3 className="eyebrow flex items-center gap-2 text-ember">
+                                    {cat.category}
+                                    {cat.hasLive ? (
+                                      <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                                    ) : null}
+                                  </h3>
+                                  <span className="ml-auto shrink-0 text-xs text-sand/50">
+                                    {cat.doneRounds}/{cat.totalRounds} done
+                                  </span>
+                                </summary>
+                                <div className="space-y-3 pt-3">
+                                  {cat.events.map((ev) => (
+                                    <EventGroupSection
+                                      key={ev.key}
+                                      group={ev}
+                                      eventTitle={event.title}
+                                      defaultOpen={activeStatus === "finals" ? true : undefined}
+                                    />
+                                  ))}
+                                </div>
+                              </details>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  })}
                 </div>
               ) : null}
 

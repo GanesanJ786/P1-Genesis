@@ -64,6 +64,7 @@ export interface Database {
           registration_url: string | null;
           media: Json;
           live_tracking: boolean;
+          show_schedule: boolean;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -83,6 +84,7 @@ export interface Database {
           registration_url?: string | null;
           media?: Json;
           live_tracking?: boolean;
+          show_schedule?: boolean;
           created_by?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;

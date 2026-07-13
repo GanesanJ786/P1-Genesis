@@ -101,6 +101,11 @@ export function EventForm({
           name="live_tracking"
           defaultChecked={event?.live_tracking ?? false}
         />
+        <CheckboxField
+          label="Show Schedule timetable on the live page (uncheck to hide it — e.g. if race times aren't set yet)"
+          name="show_schedule"
+          defaultChecked={event?.show_schedule ?? true}
+        />
         <EventSponsorPicker sponsors={sponsors} selectedIds={sponsorIds} />
       </div>
 

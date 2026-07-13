@@ -23,6 +23,7 @@ export const eventSchema = z.object({
     .or(z.literal("")),
   media_links: z.string().max(4000).optional().or(z.literal("")),
   live_tracking: z.boolean().default(false),
+  show_schedule: z.boolean().default(true),
 });
 export type EventInput = z.infer<typeof eventSchema>;
 

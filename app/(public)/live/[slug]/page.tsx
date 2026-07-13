@@ -134,7 +134,12 @@ export default async function LiveEventPage({
           </div>
 
           <LiveEventBoard
-            event={{ id: event.id, slug: event.slug, title: event.title }}
+            event={{
+              id: event.id,
+              slug: event.slug,
+              title: event.title,
+              showSchedule: event.show_schedule,
+            }}
             initialItems={items}
             initialAnnouncements={announcements}
           />
