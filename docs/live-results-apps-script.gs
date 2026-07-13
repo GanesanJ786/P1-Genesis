@@ -90,6 +90,7 @@ function onOpen() {
     .addItem("2. Re-sync Upcoming schedule (usually automatic)", "publishSchedule")
     .addItem("3. Push category sheets to Results & publish", "pushGroupTabsToResults")
     .addSeparator()
+    .addItem("Add heat to an event (spot entries)", "addHeatToEvent")
     .addItem("Upgrade existing sheets for Time/Started columns", "upgradeExistingCategorySheets")
     .addToUi();
 }

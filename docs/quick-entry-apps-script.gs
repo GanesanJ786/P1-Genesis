@@ -76,6 +76,18 @@
  *   has any typed bib is left untouched (reported in the summary), never
  *   wiped. Only brand-new or still-empty category tabs get (re)built.
  *
+ * SPOT ENTRIES — ADDING A HEAT ON THE DAY
+ *   Normally every heat is pre-generated from the Roster (step 2). If a
+ *   late/spot entry needs one more heat than planned, open the category tab
+ *   it belongs to and run "📋 Quick Entry → Add heat to an event (spot
+ *   entries)" — it asks for the Event name, a round label (e.g. "Heat 4"),
+ *   and how many bib rows to size it, then appends a fully-wired block
+ *   (same Athlete/School/Rank formulas, Time/Started, Pushed checkbox as a
+ *   generated one) to the end of that tab. Don't hand-copy an existing
+ *   block instead — the hidden Event/Heat columns it depends on are easy to
+ *   miss when copy-pasting, and a mismatch there either drops the new rows
+ *   silently or folds them into the wrong heat.
+ *
  * UPGRADING EXISTING CATEGORY SHEETS
  *   Category sheets generated before the Time/Started columns existed use
  *   an older 9-column layout. Menu "📋 Quick Entry → Upgrade existing sheets
@@ -707,6 +719,136 @@ function pushGroupTabsToResults() {
   // sendToSite is defined in live-results-apps-script.gs (same Apps Script
   // project) — reused as-is so "push" and "go live" happen in one click.
   sendToSite(true);
+}
+
+/* ── Add a heat to an already-generated event (spot entries on the day) ──── */
+
+/**
+ * Real meets sometimes get a late/spot entry needing one more heat than what
+ * the Roster pre-generated. This is the supported way to add it — hand-
+ * copying an existing block breaks the hidden Event/Heat columns
+ * pushGroupTabsToResults()/announceUpcomingBlocks() key off (they're
+ * invisible, easy to miss when copy-pasting, and a mismatch either silently
+ * drops the new rows or folds them into the wrong heat).
+ *
+ * Always APPENDS the new block to the end of the active category tab, never
+ * inserts it mid-sheet next to that event's other heats — inserting rows in
+ * the middle would need every later block's protections re-scoped, the same
+ * category of risk this project already rejected for the layout-upgrade
+ * tool (see upgradeExistingCategorySheets()). The new block is fully wired
+ * (Athlete/School/Rank formulas, Time/Started mirrors, Pushed checkboxes) —
+ * identical to a block generateCategoryTabs() would have built.
+ */
+function addHeatToEvent() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (!isGroupTab(sheet)) {
+    maybeAlert('Open the category tab (e.g. "BOYS10") you want to add a heat to, then run this again.');
+    return;
+  }
+  const ui = SpreadsheetApp.getUi();
+
+  const eventResp = ui.prompt(
+    "Add Heat — Event (1/3)",
+    'JUST the event/distance name — e.g. "300M". Do NOT include the heat/round here (that\'s the next question).',
+    ui.ButtonSet.OK_CANCEL,
+  );
+  if (eventResp.getSelectedButton() !== ui.Button.OK) return;
+  const eventName = eventResp.getResponseText().trim();
+  if (!eventName) return;
+
+  const roundResp = ui.prompt("Add Heat — Round label (2/3)", 'e.g. "Heat 4" or "Final":', ui.ButtonSet.OK_CANCEL);
+  if (roundResp.getSelectedButton() !== ui.Button.OK) return;
+  const roundLabel = normalizeHeatLabel(roundResp.getResponseText().trim() || "Final");
+
+  const rowsResp = ui.prompt("Add Heat — Slots (3/3)", "How many bib rows should this block have? (default " + HEAT_BLOCK_SIZE + "):", ui.ButtonSet.OK_CANCEL);
+  if (rowsResp.getSelectedButton() !== ui.Button.OK) return;
+  const rowCount = Number(rowsResp.getResponseText().trim()) || HEAT_BLOCK_SIZE;
+
+  // One last check before writing anything — this exact mix-up (typing the
+  // round into the Event answer, e.g. "300M - Heat 4") is what this
+  // confirmation is for: it shows precisely what will be created.
+  const confirm = ui.alert(
+    "Confirm",
+    'Create "' + eventName + " — " + roundLabel + '" (' + rowCount + " rows) in \"" + sheet.getName() + '"?' +
+    '\n\nIf "' + eventName + '" doesn\'t look like just the event/distance on its own, choose No and start over.',
+    ui.ButtonSet.YES_NO,
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const roster = ss.getSheetByName(ROSTER_SHEET_NAME);
+  if (!roster) {
+    maybeAlert('No tab named "' + ROSTER_SHEET_NAME + '" — needed for the Athlete/School lookup formulas.');
+    return;
+  }
+  const rosterValues = roster.getDataRange().getValues();
+  const headerIdx = mapHeaders(rosterValues[0], ROSTER_COLS);
+  if (headerIdx.bib === undefined || headerIdx.name === undefined || headerIdx.institution === undefined) {
+    maybeAlert("Roster is missing Bib/Athlete/Institution columns.");
+    return;
+  }
+  const bibColLetter = columnToLetter(headerIdx.bib + 1);
+  const nameColLetter = columnToLetter(headerIdx.name + 1);
+  const institutionColLetter = columnToLetter(headerIdx.institution + 1);
+
+  const isFieldBlock = classifyDiscipline(eventName) !== "Track";
+
+  // Append after a blank spacer row, same convention as generated blocks.
+  const headerRow = sheet.getLastRow() + 2;
+  const columnHeaderRow = headerRow + 1;
+  const dataStart = headerRow + 2;
+
+  sheet.getRange(headerRow, 1, 1, 11).setValues([[
+    eventName + " — " + roundLabel, "", "", "", "", "", "", "", "", "", "",
+  ]]);
+  sheet.getRange(headerRow, 1, 1, 11).setFontWeight("bold");
+  sheet.getRange(headerRow, 1, 1, 6).merge(); // A:F — leaves G/H free for Time/Started, same as a generated block
+
+  sheet.getRange(columnHeaderRow, 1, 1, 11).setValues([[
+    "Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "",
+  ]]);
+  sheet.getRange(columnHeaderRow, 1, 1, 11).setFontWeight("bold");
+
+  const mainRows = [];
+  const formulaRows = [];
+  const mirrorRows = [];
+  for (var i = 0; i < rowCount; i++) {
+    const rowNum = dataStart + i;
+    mainRows.push(["", "", "", "", "", "", "", "", false, eventName, roundLabel]);
+    formulaRows.push([
+      '=IFERROR(INDEX(Roster!$' + nameColLetter + ':$' + nameColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
+      '=IFERROR(INDEX(Roster!$' + institutionColLetter + ':$' + institutionColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
+      '=IF($A' + rowNum + '="","",COUNTIF($A$' + dataStart + ':$A' + rowNum + ',"<>"))',
+    ]);
+    mirrorRows.push([
+      '=IF($G$' + headerRow + '="","",$G$' + headerRow + ')',
+      isFieldBlock ? '=$H$' + headerRow : "",
+    ]);
+  }
+  sheet.getRange(dataStart, 1, rowCount, 11).setValues(mainRows);
+  sheet.getRange(dataStart, 2, rowCount, 3).setFormulas(formulaRows);
+  sheet.getRange(dataStart, 7, rowCount, 2).setFormulas(mirrorRows);
+  sheet.getRange(dataStart, 9, rowCount, 1).insertCheckboxes(); // I Pushed
+  if (isFieldBlock) sheet.getRange(headerRow, 8, 1, 1).insertCheckboxes(); // H Started (Field only)
+
+  // Scoped to just the newly added rows — deliberately not touching the
+  // sheet's original protections, so there's no overlap to reason about.
+  sheet.getRange(dataStart, 2, rowCount, 3).protect().setWarningOnly(true); // Athlete, School, Rank
+  sheet.getRange(dataStart, 7, rowCount, 2).protect().setWarningOnly(true); // Time, Started mirror
+  sheet.getRange(headerRow, 10, rowCount + 2, 2).protect().setWarningOnly(true); // hidden Event, Heat
+
+  // Announce it immediately — same as generateCategoryTabs() — so there's
+  // visible confirmation on the live site right away, instead of silence
+  // until someone later types a bib and runs step 3.
+  const announcedCount = announceUpcomingBlocks(ss);
+
+  maybeAlert(
+    'Added "' + eventName + " — " + roundLabel + '" with ' + rowCount + ' row(s) starting at row ' + dataStart + ' in "' + sheet.getName() + '".' +
+    (announcedCount > 0 ? "\n\nAnnounced it to the live site as Upcoming." : "") +
+    '\n\nType bibs there as usual, then run "3. Push category sheets to Results & publish".',
+  );
+
+  if (announcedCount > 0) sendToSite(false);
 }
 
 /* ── Upgrade existing category sheets to the Time/Started layout ─────────── */
