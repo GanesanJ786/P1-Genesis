@@ -98,9 +98,6 @@ export default function AboutEventPage() {
             <ButtonLink href="/sponsorship" size="lg">
               Become a Sponsor
             </ButtonLink>
-            <ButtonLink href={SITE.prospectusPath} external target="_blank" variant="outline" size="lg">
-              Download Prospectus
-            </ButtonLink>
           </div>
         </Container>
       </Section>

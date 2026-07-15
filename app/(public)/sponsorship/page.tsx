@@ -85,15 +85,6 @@ export default function SponsorshipPage() {
             <ButtonLink href="/contact?intent=sponsor" size="lg">
               Discuss a Partnership
             </ButtonLink>
-            <ButtonLink
-              href={SITE.prospectusPath}
-              external
-              target="_blank"
-              size="lg"
-              variant="outline"
-            >
-              Download Prospectus
-            </ButtonLink>
           </div>
         </Container>
       </Section>

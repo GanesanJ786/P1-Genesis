@@ -13,7 +13,6 @@ export const SITE = {
   organiser: "Genesis Sports Foundation",
   venue: "Nehru Stadium, Coimbatore",
   dates: "31 July & 1 Aug 2026",
-  prospectusPath: "/genesis-trackfest-2026-prospectus.pdf",
 } as const;
 
 export const CONTACT = {
