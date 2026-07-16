@@ -8,6 +8,7 @@ import {
   X,
   Download,
   Loader2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ResultCard } from "@/components/public/ResultCard";
@@ -137,6 +138,18 @@ function roundNumber(heat: string | null): number {
   return m ? Number(m[1]) : 0;
 }
 
+/** Category/Gender/Event header badge. Under a status filter (Done/Live/
+ *  Upcoming/Finals), the group being counted is already narrowed to that
+ *  status, so "done" is trivially the whole count (e.g. "9/9 done" on every
+ *  single card under the Done tab) — a plain count with the filter's own
+ *  label is more honest. The done/total ratio is only meaningful in the
+ *  unfiltered "All" view, where statuses actually mix. */
+function roundsBadge(done: number, total: number, status: StatusFilter): string {
+  if (status === "all") return `${done}/${total} done`;
+  const label = STATUS_FILTERS.find((s) => s.key === status)?.label ?? status;
+  return `${total} ${label}`;
+}
+
 // Field events are sometimes named with a leading number that isn't a race
 // distance at all (e.g. "5M RUNNING LONG JUMP" = a short run-up long jump,
 // not a 5m dash) — checked first so those never get sorted in among actual
@@ -260,10 +273,12 @@ function EventGroupSection({
   group,
   eventTitle,
   defaultOpen,
+  statusFilter,
 }: {
   group: EventGroup;
   eventTitle: string;
   defaultOpen?: boolean;
+  statusFilter: StatusFilter;
 }) {
   // Finished events collapse by default; anything live/upcoming stays open.
   const allCompleted = group.rounds.every((r) => r.status === "completed");
@@ -273,7 +288,7 @@ function EventGroupSection({
       open={defaultOpen ?? !allCompleted}
       className="group/event overflow-hidden rounded-2xl border border-sand/10 bg-ink-soft/40"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 hover:bg-white/[0.02] [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.02] active:bg-white/[0.05] [&::-webkit-details-marker]:hidden">
         <ChevronRight
           size={16}
           className="shrink-0 text-sand/50 transition-transform group-open/event:rotate-90"
@@ -288,7 +303,7 @@ function EventGroupSection({
           </span>
         ) : null}
         <span className="ml-auto shrink-0 text-xs text-sand/50">
-          {doneCount}/{group.rounds.length} done
+          {roundsBadge(doneCount, group.rounds.length, statusFilter)}
         </span>
       </summary>
       <div className="px-4 pb-1.5">
@@ -312,29 +327,24 @@ function FilterChips({
   onSelect: (v: string | null) => void;
 }) {
   if (options.length < 2) return null;
+  const chip = (isActive: boolean) =>
+    `shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all active:scale-95 ${
+      isActive
+        ? "bg-ember text-white shadow-sm shadow-ember/30"
+        : "bg-ink text-sand hover:text-cream"
+    }`;
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[0.65rem] uppercase tracking-widest text-sand/60">{label}</span>
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          onClick={() => onSelect(null)}
-          className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold transition-colors ${
-            active === null
-              ? "bg-ember text-white"
-              : "bg-ink text-sand hover:text-cream"
-          }`}
-        >
+      <div className="snap-rail -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <button onClick={() => onSelect(null)} className={chip(active === null)}>
           All
         </button>
         {options.map((o) => (
           <button
             key={o}
             onClick={() => onSelect(active === o ? null : o)}
-            className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold transition-colors ${
-              active === o
-                ? "bg-ember text-white"
-                : "bg-ink text-sand hover:text-cream"
-            }`}
+            className={chip(active === o)}
           >
             {o}
           </button>
@@ -365,6 +375,10 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeGender, setActiveGender] = useState<string | null>(null);
   const [activeDiscipline, setActiveDiscipline] = useState<string | null>(null);
+  // Age/Gender/Discipline chips are secondary filters — on mobile they cost a
+  // full screen of vertical space before any result shows, so they collapse
+  // behind a "Filters" toggle. Kept open on larger screens (see the panel).
+  const [showFilters, setShowFilters] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   // Whether the Realtime channel is currently subscribed. When it is, the poll
   // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
@@ -560,6 +574,16 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     setActiveDiscipline(null); // reset discipline when category changes
   };
 
+  const activeFilterCount =
+    (activeCategory ? 1 : 0) + (activeGender ? 1 : 0) + (activeDiscipline ? 1 : 0);
+  const hasFilterOptions =
+    categories.length > 1 || genders.length > 1 || disciplines.length > 1;
+  const clearFilters = () => {
+    setActiveCategory(null);
+    setActiveGender(null);
+    setActiveDiscipline(null);
+  };
+
   const filtered = useMemo(
     () =>
       dayAll.filter((r) => {
@@ -649,7 +673,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     totalEventCount === 0 && (activeStatus !== "all" || allRunning.length === 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       {/* Live indicator bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
         <div className="flex items-center gap-3">
@@ -746,20 +770,41 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
               ) : null}
             </div>
             {!q ? (
-              <div className="flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {STATUS_FILTERS.map((s) => (
+              <div className="flex items-center gap-2">
+                <div className="snap-rail -mx-1 flex flex-1 gap-2 overflow-x-auto px-1">
+                  {STATUS_FILTERS.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => setActiveStatus(s.key)}
+                      className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all active:scale-95 ${
+                        activeStatus === s.key
+                          ? "bg-ember text-white shadow-sm shadow-ember/30"
+                          : "bg-ink-soft text-sand hover:text-cream"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                {hasFilterOptions ? (
                   <button
-                    key={s.key}
-                    onClick={() => setActiveStatus(s.key)}
-                    className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold transition-colors ${
-                      activeStatus === s.key
-                        ? "bg-ember text-white"
+                    type="button"
+                    onClick={() => setShowFilters((v) => !v)}
+                    aria-expanded={showFilters}
+                    className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-all active:scale-95 ${
+                      showFilters || activeFilterCount > 0
+                        ? "bg-ember/15 text-ember ring-1 ring-ember/40"
                         : "bg-ink-soft text-sand hover:text-cream"
                     }`}
                   >
-                    {s.label}
+                    <SlidersHorizontal size={15} />
+                    {activeFilterCount > 0 ? (
+                      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[0.65rem] font-bold text-white">
+                        {activeFilterCount}
+                      </span>
+                    ) : null}
                   </button>
-                ))}
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -810,7 +855,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </div>
               ) : null}
 
-              {categories.length > 1 || genders.length > 1 || disciplines.length > 1 ? (
+              {hasFilterOptions && showFilters ? (
                 <div className="space-y-4 rounded-2xl border border-sand/10 bg-ink-soft p-5">
                   <FilterChips
                     label="Age Group"
@@ -830,6 +875,15 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                     active={activeDiscipline}
                     onSelect={setActiveDiscipline}
                   />
+                  {activeFilterCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-ember transition-colors hover:text-ember-bright active:scale-95"
+                    >
+                      <X size={13} /> Clear filters
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -866,7 +920,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                         open={activeStatus === "finals" ? true : !genderDone}
                         className="group/gender overflow-hidden rounded-3xl border border-sand/15 bg-ink-soft/20"
                       >
-                        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3.5 hover:bg-white/[0.02] [&::-webkit-details-marker]:hidden sm:px-5">
+                        <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-4 py-3.5 transition-colors hover:bg-white/[0.02] active:bg-white/[0.05] [&::-webkit-details-marker]:hidden sm:px-5">
                           <ChevronRight
                             size={18}
                             className="shrink-0 text-sand/50 transition-transform group-open/gender:rotate-90"
@@ -881,7 +935,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                             </span>
                           ) : null}
                           <span className="ml-auto shrink-0 text-xs text-sand/50">
-                            {g.doneRounds}/{g.totalRounds} done
+                            {roundsBadge(g.doneRounds, g.totalRounds, activeStatus)}
                           </span>
                         </summary>
                         <div className="space-y-5 border-t border-sand/10 px-4 pb-5 pt-4 sm:px-5">
@@ -893,7 +947,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                                 open={activeStatus === "finals" ? true : !catDone}
                                 className="group/category"
                               >
-                                <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden">
+                                <summary className="-mx-1 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1.5 transition-colors active:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
                                   <ChevronRight
                                     size={14}
                                     className="shrink-0 text-sand/40 transition-transform group-open/category:rotate-90"
@@ -905,7 +959,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                                     ) : null}
                                   </h3>
                                   <span className="ml-auto shrink-0 text-xs text-sand/50">
-                                    {cat.doneRounds}/{cat.totalRounds} done
+                                    {roundsBadge(cat.doneRounds, cat.totalRounds, activeStatus)}
                                   </span>
                                 </summary>
                                 <div className="space-y-3 pt-3">
@@ -915,6 +969,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                                       group={ev}
                                       eventTitle={event.title}
                                       defaultOpen={activeStatus === "finals" ? true : undefined}
+                                      statusFilter={activeStatus}
                                     />
                                   ))}
                                 </div>

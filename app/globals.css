@@ -42,6 +42,51 @@ body {
   overflow-x: hidden;
 }
 
+/* Native-app tap feel: kill the mobile 300ms delay + the grey flash that
+   Safari/Chrome paint on every tap (the single biggest "this is a web page,
+   not an app" tell). Applied to everything interactive. */
+button,
+a,
+summary,
+[role="button"],
+input,
+label {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Replace the browser's default blue focus box (which read as a rendering
+   glitch against the ember/ink theme — e.g. the blue ring around a tapped
+   result card) with an on-brand ring shown ONLY for keyboard users. Touch
+   and mouse taps leave no lingering outline; a11y is preserved via
+   :focus-visible. Inputs keep their own Tailwind focus:ring. */
+:focus {
+  outline: none;
+}
+summary:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-ember) 75%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Horizontal chip/filter rails: hide the scrollbar but keep momentum scroll
+   and snap so they feel like a native carousel. Opt in with .snap-rail. */
+.snap-rail {
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.snap-rail::-webkit-scrollbar {
+  display: none;
+}
+.snap-rail > * {
+  scroll-snap-align: start;
+}
+
 /* Reduced-motion: neutralize animations/transitions */
 @media (prefers-reduced-motion: reduce) {
   *,

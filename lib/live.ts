@@ -70,6 +70,18 @@ export function isFinalHeat(heatLabel: string | null | undefined): boolean {
 }
 
 /** Coerce the results jsonb into clean Finisher rows, sorted by rank. */
+/** A result of "-", "–", "N/A", "TBD" etc. means "no time recorded" (common
+ *  for young age-group heats scored on placing only) — treat it as empty so
+ *  the UI/share/PDF don't fill a whole column with meaningless dashes. */
+function normalizeResult(raw: unknown): string {
+  const s = (typeof raw === "string" ? raw : String(raw ?? "")).trim();
+  if (!s) return "";
+  if (/^[-–—.\s]+$/.test(s)) return ""; // only dashes/dots/spaces = no time
+  if (/^(n\/?a|nil|tbd|tba)$/i.test(s)) return ""; // "no data" placeholders
+  if (/^(dnf|dns|dq)$/i.test(s)) return s.toUpperCase(); // real athletics status codes — keep
+  return s;
+}
+
 export function parseFinishers(raw: Json): Finisher[] {
   if (!Array.isArray(raw)) return [];
   const out: Finisher[] = [];
@@ -83,7 +95,7 @@ export function parseFinishers(raw: Json): Finisher[] {
       bib: typeof e.bib === "string" && e.bib.trim() ? String(e.bib).trim() : undefined,
       name,
       school: typeof e.school === "string" ? e.school.trim() : "",
-      result: typeof e.result === "string" ? e.result.trim() : String(e.result ?? ""),
+      result: normalizeResult(e.result),
       record:
         typeof e.record === "string" && e.record.trim()
           ? e.record.trim().toUpperCase()

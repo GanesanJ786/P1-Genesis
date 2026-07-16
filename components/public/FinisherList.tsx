@@ -34,35 +34,44 @@ export function FinisherList({
             // heat) legitimately share a rank — so fall back to bib, then
             // array position, rather than assuming rank never repeats.
             key={entry.bib ? `${entry.rank}-${entry.bib}` : `${entry.rank}-${i}`}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2 ${
+            className={`flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors ${
               isMatch
                 ? "bg-ember/15 ring-1 ring-ember/40"
                 : isFinal && entry.rank === 1
                   ? "bg-amber-500/10"
-                  : "bg-ink/60"
+                  : "bg-white/[0.03]"
             }`}
           >
+            {/* Rank: medal for a finals podium, otherwise a consistent
+                circular number badge — reads as a clean native list, and
+                the podium tiers (gold/silver/bronze) stay colour-coded. */}
             {isFinal && entry.rank <= 3 ? (
-              <span className="w-6 shrink-0 text-center text-lg leading-none">
+              <span className="w-7 shrink-0 text-center text-xl leading-none">
                 {MEDALS[entry.rank - 1]}
               </span>
             ) : (
-              <span className="w-6 shrink-0 text-center text-xs font-bold text-sand/50">
-                #{entry.rank}
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
+                  entry.rank === 1
+                    ? "bg-ember/20 text-ember"
+                    : "bg-white/[0.06] text-sand"
+                }`}
+              >
+                {entry.rank}
               </span>
             )}
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-cream">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-cream">
                 {entry.bib ? (
-                  <span className="mr-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-sand">
+                  <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-sand">
                     {entry.bib}
                   </span>
                 ) : null}
-                {entry.name}
+                <span className="truncate">{entry.name}</span>
                 {entry.record ? (
                   <span
-                    className={`ml-1.5 rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
                       RECORD_STYLES[entry.record] ?? "bg-white/10 text-cream"
                     }`}
                     title={
@@ -78,12 +87,12 @@ export function FinisherList({
                 ) : null}
               </p>
               {entry.school ? (
-                <p className="truncate text-xs text-sand">{entry.school}</p>
+                <p className="truncate text-xs text-sand/80">{entry.school}</p>
               ) : null}
             </div>
 
             {entry.result ? (
-              <span className="shrink-0 text-sm font-semibold text-ember">
+              <span className="shrink-0 text-sm font-bold tabular-nums text-ember">
                 {entry.result}
               </span>
             ) : null}

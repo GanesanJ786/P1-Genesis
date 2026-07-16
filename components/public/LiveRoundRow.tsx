@@ -134,7 +134,7 @@ export function LiveRoundRow({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full cursor-pointer py-3 pr-1 text-left hover:bg-white/[0.02]"
+        className="-mx-1 w-[calc(100%+0.5rem)] cursor-pointer rounded-lg px-1 py-3 text-left transition-colors hover:bg-white/[0.02] active:bg-white/[0.05]"
       >
         {header}
       </button>
