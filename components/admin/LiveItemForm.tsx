@@ -136,6 +136,7 @@ export function LiveItemForm({
           defaultValue={item?.status ?? "upcoming"}
           options={[
             { value: "upcoming", label: "Upcoming" },
+            { value: "finalist", label: "Finalist" },
             { value: "in_progress", label: "Live" },
             { value: "paused", label: "Paused" },
             { value: "completed", label: "Completed" },

@@ -5,6 +5,7 @@ import {
   scheduleComparator,
   LIVE_STATUS_LABELS,
   type LiveRow,
+  type IndividualResultRow,
 } from "@/lib/live";
 import { slugify } from "@/lib/utils";
 
@@ -328,4 +329,82 @@ export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string):
   }
 
   doc.save(`${slugify(eventTitle)}-schedule.pdf`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Individual results — a school's (or any filtered view's) report            */
+/* -------------------------------------------------------------------------- */
+
+const INDIVIDUAL_RESULTS_HEAD = [
+  ["Round", "Event", "Category", "Gender", "Bib", "Athlete", "Institution", "Result", "Medal"],
+];
+
+const MEDAL_LABEL: Record<"Gold" | "Silver" | "Bronze", string> = {
+  Gold: "Gold",
+  Silver: "Silver",
+  Bronze: "Bronze",
+};
+
+function individualResultRow(r: IndividualResultRow): string[] {
+  return [
+    r.round,
+    r.event,
+    r.category,
+    r.gender,
+    r.bib ?? "",
+    r.name,
+    r.school || "",
+    r.result || "",
+    r.medal ? MEDAL_LABEL[r.medal] : "",
+  ];
+}
+
+/** A report for one institute (or whatever the Individual Results tab's
+ *  filters currently narrow down to) — landscape, since the row shape has
+ *  more columns than the per-round/schedule reports. */
+export async function downloadIndividualResultsPdf(
+  rows: IndividualResultRow[],
+  eventTitle: string,
+  scopeLabel: string,
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  const bandH = await drawHeaderBand(doc, pageW, eventTitle, scopeLabel.toUpperCase());
+
+  autoTable(doc, {
+    startY: bandH + 8,
+    head: INDIVIDUAL_RESULTS_HEAD,
+    body: rows.map(individualResultRow),
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
+    headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: STRIPE },
+    margin: { top: 16 },
+    columnStyles: {
+      4: { cellWidth: 16, halign: "center" },
+      7: { cellWidth: 22, halign: "right", fontStyle: "bold" },
+      8: { cellWidth: 20, halign: "center" },
+    },
+  });
+
+  const pages = doc.getNumberOfPages();
+  const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  for (let i = 1; i <= pages; i += 1) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(`${eventTitle} · ${scopeLabel} · ${stamp}`, 14, pageH - 8);
+    doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
+      align: "right",
+    });
+  }
+
+  doc.save(`${slugify(eventTitle)}-${slugify(scopeLabel)}.pdf`);
 }

@@ -36,8 +36,9 @@
  *      are just pre-sized paper/blank slots to write bibs into. Every block
  *      also gets a **Time** cell right on its header row (type the
  *      scheduled time there — optional, shown live on the site once typed)
- *      and, for Field blocks only, a **Started** checkbox (see step 5).
- *      Generating also immediately announces every block to the live site's
+ *      and, for every **Final** block only (Track or Field), a **Started**
+ *      checkbox (see step 5). Generating also immediately announces every
+ *      block to the live site's
  *      Upcoming list — no separate publish click needed (see step 3).
  *   3. Menu "📋 Quick Entry → 2. Re-sync Upcoming schedule (usually
  *      automatic)". Step 2 (generating tabs) already announces every block
@@ -51,18 +52,25 @@
  *      order. Athlete name and School auto-appear (a live formula looks them
  *      up from Roster) and Rank auto-fills as the position among bibs typed
  *      so far in that block. Type the Result (time/distance) yourself, and
- *      Record ("MR"/"NR") if one fell. That's the only typing needed.
+ *      Record ("MR"/"NR") if one fell. That's the only typing needed. A
+ *      **Final** block only (not Heats/Semifinals) also auto-fills **Points**
+ *      per team-scoring rules: 1st=7, 2nd=5, 3rd=4, 4th=3, 5th=2, 6th=1,
+ *      7th-or-worse=0 — capped at each institute's best TWO placings in that
+ *      event, so a 3rd (or worse) finisher from a school that already took
+ *      two higher spots scores 0.
  *   5. Menu "📋 Quick Entry → 3. Push category sheets to Results & publish".
- *      Run this any time, including mid-heat: for **Track** blocks, any
- *      block with a typed Bib but no Result yet gets marked Status "Live"
- *      (no reliable "started" signal exists for a race beyond someone
- *      typing a bib). For **Field** blocks, bibs may be listed well before
- *      the competition actually begins, so Live is instead controlled by
- *      the **Started** checkbox on that block's header row — tick it when
- *      the event starts and it goes Live; leave it blank and it stays
- *      Upcoming no matter how many bibs are typed. Separately (both
- *      disciplines), any row with both Bib and Result filled (and not
- *      already pushed) gets appended to the "Results" tab in the exact
+ *      Run this any time, including mid-heat: for a Track **Heat/Semifinal**
+ *      block, any typed Bib but no Result yet gets marked Status "Live" (no
+ *      reliable "started" signal exists for a race beyond someone typing a
+ *      bib). For any **Final** block (Track or Field), bibs are typically
+ *      known well before the race actually begins — typing them in marks
+ *      the block Status **"Finalist"** instead (qualified lineup shown on
+ *      the live site, countdown to the scheduled time, but not yet Live).
+ *      Tick the **Started** checkbox on that block's header row once the
+ *      Final actually begins to flip it to "Live"; leave it blank and it
+ *      stays "Finalist" no matter how many bibs are typed. Separately (any
+ *      block, any discipline), any row with both Bib and Result filled (and
+ *      not already pushed) gets appended to the "Results" tab in the exact
  *      grouped format the existing "⚡ Live Site" script expects — carrying
  *      the block's Time along as the Scheduled time — ticks its Pushed
  *      checkbox so re-running never duplicates it, and then immediately
@@ -70,11 +78,25 @@
  *      click covers both moving the data AND putting it on the live page.
  *      A race never gets downgraded backwards (Completed stays Completed
  *      even if you push again), and Status for a given Event Key always
- *      reflects whichever of Upcoming/Live/Completed was set most recently.
+ *      reflects whichever of Upcoming/Finalist/Live/Completed was set most
+ *      recently. If a Finalist scratches before the Final runs, type "DNS"
+ *      literally into their Result cell so they're correctly excluded from
+ *      medal consideration once the block completes — an athlete left with
+ *      a blank Result after the block otherwise completes will not be
+ *      auto-corrected.
  *
  *   Re-running step 2 (tab generation) is safe: a category tab that already
  *   has any typed bib is left untouched (reported in the summary), never
  *   wiped. Only brand-new or still-empty category tabs get (re)built.
+ *
+ * VIEWING "QUALIFIED TO FINALS" RACES
+ *   Menu "📋 Quick Entry → View 'qualified to Finals' races" filters the
+ *   "Results" tab down to Status = "Finalist" only — every Final whose
+ *   lineup is known but hasn't started yet. Same underlying data as the
+ *   live site's "Qualified" filter pill. "Show all races (clear filter)"
+ *   removes it again. Apps Script only supports one sheet-wide basic
+ *   filter, so running this replaces whatever filter (if any) is already
+ *   on that tab.
  *
  * SPOT ENTRIES — ADDING A HEAT ON THE DAY
  *   Normally every heat is pre-generated from the Roster (step 2). If a
@@ -97,6 +119,15 @@
  *   block/row — nothing typed is lost. Sheets already on the new layout are
  *   skipped automatically, so it's safe to re-run.
  *
+ *   This tool detects "old layout" by column content (does G read "Pushed"
+ *   or "Time"?), so a tab already on the Time/Started layout but generated
+ *   BEFORE the Points column existed is NOT picked up by it (it already
+ *   looks like the "new" layout). If a tab is missing Points and has no
+ *   typed bibs yet, simplest fix is deleting that tab and re-running
+ *   "1. Generate category sheets from Roster" — it'll be rebuilt fresh with
+ *   Points included. If it already has real typed data, ask before doing
+ *   anything destructive to it.
+ *
  * INSTALL
  *   In the SAME Apps Script project as live-results-apps-script.gs:
  *   Extensions → Apps Script → the "+" next to Files → Script, name it
@@ -113,6 +144,7 @@ const HEAT_PLAN_SHEET_NAME = "Heat Plan"; // optional; overrides the guessed hea
 const HEAT_BLOCK_SIZE = 8; // bibs per heat block for Track events
 const FIELD_BLOCK_BUFFER = 3; // extra blank rows beyond entrant count
 const GROUP_TAB_METADATA_KEY = "GENESIS_CATEGORY_TAB";
+const GROUP_TAB_EVENTS_KEY = "GENESIS_CATEGORY_EVENTS_SIGNATURE"; // detects "roster changed for this category since it was built"
 
 const HEAT_PLAN_COLS = {
   category: "CATEGORY",
@@ -178,7 +210,10 @@ function generateCategoryTabs() {
 
   const grouped = computeCategoryEventGroups(values, headerIdx);
   if (grouped.categoryOrder.length === 0) {
-    maybeAlert("No usable rows found — check Bib/Athlete/Category/Event-1/Event-2 are filled in the roster.");
+    var reason = grouped.skippedMissingGender > 0
+      ? "Found rows, but all " + grouped.skippedMissingGender + " were missing GENDER — fill that column in and re-run."
+      : "No usable rows found — check Bib/Athlete/Category/Gender/Event-1/Event-2 are filled in the roster.";
+    maybeAlert(reason);
     return;
   }
 
@@ -193,6 +228,18 @@ function generateCategoryTabs() {
       skipped.push(category);
       return;
     }
+    // A large roster can split into enough tabs/blocks that one run hits
+    // Apps Script's execution time cap partway through. Without this check,
+    // every retry would reset+rebuild every tab already finished in the
+    // previous (also timed-out) run before it could reach new ground —
+    // never making forward progress. Skipping a tab whose event/entrant
+    // layout hasn't changed since it was last built (even though it has no
+    // typed bib yet) means each retry only does the work still remaining.
+    const signature = eventsSignature(grouped.groups[category]);
+    if (existing && isGroupTab(existing) && groupTabEventsSignature(existing) === signature) {
+      skipped.push(category);
+      return;
+    }
     var sheet = existing;
     if (sheet) {
       resetGroupTab(sheet);
@@ -200,6 +247,7 @@ function generateCategoryTabs() {
       sheet = ss.insertSheet(category);
     }
     buildCategorySheet(sheet, category, grouped.groups[category], bibColLetter, nameColLetter, institutionColLetter, heatPlan);
+    markGroupTabEvents(sheet, signature);
     created.push(category);
   });
 
@@ -211,35 +259,64 @@ function generateCategoryTabs() {
   var msg = "Created/updated " + created.length + " category sheet(s)" + (created.length ? ": " + created.join(", ") : "") + ".";
   if (skipped.length) msg += "\n\nAlready had typed data, left untouched: " + skipped.join(", ") + ".";
   if (announcedCount > 0) msg += "\n\nAnnounced " + announcedCount + " upcoming race(s) to the live site.";
+  if (grouped.skippedMissingGender > 0) {
+    msg += "\n\nSkipped " + grouped.skippedMissingGender + " roster row(s) with a blank GENDER — fill that in and re-run to include them.";
+  }
   maybeAlert(msg);
 
   if (announcedCount > 0) sendToSite(false);
 }
 
-/** Groups roster rows into { groups: { category: { event: entrantCount } }, categoryOrder: [...] }. */
+/**
+ * Groups roster rows into { groups: { groupKey: { event: entrantCount } },
+ * categoryOrder: [...], skippedMissingGender: n }.
+ *
+ * groupKey is Category+Gender combined (e.g. "U12 GIRLS", "OPEN WOMEN") —
+ * Roster's Category column alone is age-group only (U12/U14/OPEN/...), so
+ * Gender must be folded into the grouping key or Boys/Girls (or Men/Women)
+ * end up mixed into one shared tab. This groupKey becomes the actual sheet
+ * tab name, so a "Heat Plan" tab entry must reference the same combined
+ * name (e.g. CATEGORY = "OPEN WOMEN", not just "OPEN") to match.
+ */
 function computeCategoryEventGroups(values, headerIdx) {
   const groups = {};
   const categoryOrder = [];
+  var skippedMissingGender = 0;
 
   for (var r = 1; r < values.length; r++) {
     const row = values[r];
     const bib = String(cell(row, headerIdx, "bib")).trim();
     const name = String(cell(row, headerIdx, "name")).trim();
     const category = String(cell(row, headerIdx, "category")).trim();
+    const gender = String(cell(row, headerIdx, "gender")).trim();
     if (!bib || !name || !category) continue;
+    if (!gender) {
+      skippedMissingGender++;
+      continue;
+    }
 
-    if (!groups[category]) {
-      groups[category] = {};
-      categoryOrder.push(category);
+    const groupKey = category.toUpperCase() + " " + gender.toUpperCase();
+
+    if (!groups[groupKey]) {
+      groups[groupKey] = {};
+      categoryOrder.push(groupKey);
     }
     [String(cell(row, headerIdx, "event1")).trim(), String(cell(row, headerIdx, "event2")).trim()]
       .forEach(function (event) {
-        if (!event) return;
-        groups[category][event] = (groups[category][event] || 0) + 1;
+        if (!event || isBlankPlaceholder(event)) return;
+        groups[groupKey][event] = (groups[groupKey][event] || 0) + 1;
       });
   }
 
-  return { groups: groups, categoryOrder: categoryOrder };
+  return { groups: groups, categoryOrder: categoryOrder, skippedMissingGender: skippedMissingGender };
+}
+
+// A roster cell of "-", "–", "N/A", "NIL", etc. means "no second event" (an
+// athlete with only one event leaves EVENT-2 as a placeholder dash rather
+// than truly blank) — treat it the same as empty, or it gets read as a real
+// event named "-" and generates a bogus "- — Heat 1/2/3/Final" block.
+function isBlankPlaceholder(s) {
+  return /^[-–—.\s]+$/.test(s) || /^(n\/?a|nil|tbd|tba|none)$/i.test(s);
 }
 
 /**
@@ -288,9 +365,11 @@ function readHeatPlan(ss) {
  * formula (same trick as the Athlete/School Roster lookups) so the read side
  * never needs to track "which header row does this data row belong to" —
  * every data row is already self-contained, same as the hidden Event/Heat
- * columns. Started is Field-only (a checkbox is only inserted on a Field
- * block's header row) — Track blocks leave it blank/unused since a bib
- * being typed is already the "started" signal for those.
+ * columns. Started only matters for a Final block (Track or Field) — typing
+ * a bib into a Final ahead of the actual race (announcing who qualified)
+ * shouldn't itself flip the race Live, so Started is the explicit signal
+ * for that transition. Track Heat/Semifinal blocks leave it blank/unused —
+ * a bib being typed there is already the "started" signal, same as always.
  */
 function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColLetter, institutionColLetter, heatPlan) {
   const mainRows = [];
@@ -299,18 +378,19 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   const dataRowRanges = []; // { start, count } per block, for Pushed checkbox insertion + protection
   const formulaBlocks = []; // { start, count, matrix } per block, for Athlete/School/Rank setFormulas
   const mirrorBlocks = []; // { start, count, matrix } per block, for Time/Started mirror setFormulas
-  const fieldStartedHeaderRows = []; // header rows needing a Started checkbox (Field blocks only)
+  const pointsBlocks = []; // { start, count, matrix } per Final block, for the Points column formula
+  const finalStartedHeaderRows = []; // header rows needing a Started checkbox (Final blocks only, Track or Field)
 
   function pushBlankRow() {
-    mainRows.push(["", "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
   }
   function pushTitleRow() {
-    mainRows.push(["Category: " + category, "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push(["Category: " + category, "", "", "", "", "", "", "", "", "", "", ""]);
     boldRows.push(mainRows.length);
     mergeRows.push(mainRows.length);
   }
   function pushBlockHeaderRow(label) {
-    mainRows.push([label, "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push([label, "", "", "", "", "", "", "", "", "", "", ""]);
     boldRows.push(mainRows.length);
     mergeRows.push(mainRows.length);
     return mainRows.length; // 1-based row number, for the Time/Started mirror formulas
@@ -318,8 +398,13 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   function pushColumnHeaderRow() {
     // J/K stay blank here (not "Event"/"Heat" labels) so tabHasTypedData's
     // "hidden Event column non-blank = a real data row" check can't
-    // false-positive on the header row itself.
-    mainRows.push(["Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", ""]);
+    // false-positive on the header row itself. Points (L) sits after the
+    // hidden J/K columns — with J/K hidden, it reads visually right after
+    // Pushed — deliberately appended at the very end rather than inserted
+    // earlier, so it never shifts any of the many existing column-index
+    // references (row[3] Rank, row[7] Started, row[9] Event, etc.) elsewhere
+    // in this file.
+    mainRows.push(["Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points"]);
     boldRows.push(mainRows.length);
   }
   function dataRowFormulas(rowNum, blockStartRow) {
@@ -333,10 +418,10 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   // cell (would otherwise turn "no time typed" into a bogus epoch date
   // downstream). Started is always a checkbox (TRUE/FALSE), never truly
   // blank, so a bare reference is safe there.
-  function mirrorFormulas(headerRow, isFieldBlock) {
+  function mirrorFormulas(headerRow, isFinalBlock) {
     return [
       '=IF($G$' + headerRow + '="","",$G$' + headerRow + ')',
-      isFieldBlock ? '=$H$' + headerRow : "",
+      isFinalBlock ? '=$H$' + headerRow : "",
     ];
   }
 
@@ -347,7 +432,6 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
     const count = eventCounts[eventName];
     if (count <= 0) return;
     const discipline = classifyDiscipline(eventName);
-    const isFieldBlock = discipline !== "Track";
     const blocks = [];
     if (discipline === "Track") {
       const plannedEntry = heatPlan[category + "||" + eventName];
@@ -365,39 +449,87 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
     }
 
     blocks.forEach(function (block) {
+      // Computed per-block, not per-event — a Track event's Heat/Semifinal
+      // blocks must NOT get a Started checkbox even though its own Final
+      // block (later in the same `blocks` array) does. Field disciplines
+      // only ever produce a single "Final" block (see above), so this is
+      // simply always true for them — this replaced an event-level
+      // isFieldBlock check that only "worked" by coincidence for Field.
+      const isFinalBlock = block.label === "Final";
       const headerRow = pushBlockHeaderRow(eventName + " — " + block.label);
-      if (isFieldBlock) fieldStartedHeaderRows.push(headerRow);
+      if (isFinalBlock) finalStartedHeaderRows.push(headerRow);
       pushColumnHeaderRow();
       const blockStartRow = mainRows.length + 1;
+      const blockEndRow = blockStartRow + block.rows - 1;
       const blockFormulas = [];
       const blockMirrors = [];
+      const blockPoints = [];
       for (var i = 0; i < block.rows; i++) {
-        mainRows.push(["", "", "", "", "", "", "", "", false, eventName, block.label]);
+        mainRows.push(["", "", "", "", "", "", "", "", false, eventName, block.label, ""]);
         const rowNum = mainRows.length;
         blockFormulas.push(dataRowFormulas(rowNum, blockStartRow));
-        blockMirrors.push(mirrorFormulas(headerRow, isFieldBlock));
+        blockMirrors.push(mirrorFormulas(headerRow, isFinalBlock));
+        if (isFinalBlock) blockPoints.push([pointsFormula(rowNum, blockStartRow, blockEndRow)]);
       }
       dataRowRanges.push({ start: blockStartRow, count: block.rows });
       formulaBlocks.push({ start: blockStartRow, count: block.rows, matrix: blockFormulas });
       mirrorBlocks.push({ start: blockStartRow, count: block.rows, matrix: blockMirrors });
+      if (isFinalBlock) pointsBlocks.push({ start: blockStartRow, count: block.rows, matrix: blockPoints });
       pushBlankRow();
     });
   });
 
   const totalRows = mainRows.length;
-  sheet.getRange(1, 1, totalRows, 11).setValues(mainRows);
+  sheet.getRange(1, 1, totalRows, 12).setValues(mainRows);
   formulaBlocks.forEach(function (b) { sheet.getRange(b.start, 2, b.count, 3).setFormulas(b.matrix); });
   mirrorBlocks.forEach(function (b) { sheet.getRange(b.start, 7, b.count, 2).setFormulas(b.matrix); });
+  pointsBlocks.forEach(function (b) { sheet.getRange(b.start, 12, b.count, 1).setFormulas(b.matrix); });
 
-  boldRows.forEach(function (r) { sheet.getRange(r, 1, 1, 11).setFontWeight("bold"); });
+  // Batched via getRangeList() (one API round-trip for every row/block,
+  // instead of one PER row/block) — a large roster splits into enough
+  // category tabs and event blocks that the old per-row/per-block loops
+  // could rack up 500+ separate Sheets API calls in a single run and blow
+  // past Apps Script's 6-minute execution cap. merge() has no RangeList
+  // batch form, so mergeRows stays a per-row loop — it's a much smaller
+  // count (one per block header, not two-plus like bold/checkboxes).
+  if (boldRows.length) {
+    sheet.getRangeList(boldRows.map(function (r) { return "A" + r + ":L" + r; })).setFontWeight("bold");
+  }
   mergeRows.forEach(function (r) { sheet.getRange(r, 1, 1, 6).merge(); }); // A:F — leaves G/H free on the header row itself
-  dataRowRanges.forEach(function (rr) { sheet.getRange(rr.start, 9, rr.count, 1).insertCheckboxes(); }); // I Pushed
-  fieldStartedHeaderRows.forEach(function (r) { sheet.getRange(r, 8, 1, 1).insertCheckboxes(); }); // H Started
+  if (dataRowRanges.length) {
+    sheet.getRangeList(dataRowRanges.map(function (rr) { return "I" + rr.start + ":I" + (rr.start + rr.count - 1); })).insertCheckboxes(); // I Pushed
+  }
+  if (finalStartedHeaderRows.length) {
+    sheet.getRangeList(finalStartedHeaderRows.map(function (r) { return "H" + r; })).insertCheckboxes(); // H Started
+  }
 
   sheet.hideColumns(10, 2); // J:K (Event, Heat helper columns)
   sheet.setFrozenRows(1);
   protectFormulaRanges(sheet, totalRows, dataRowRanges);
   markGroupTab(sheet, category);
+}
+
+// Team-scoring points for a Final placing: 1st=7, 2nd=5, 3rd=4, 4th=3,
+// 5th=2, 6th=1, 7th-or-worse=0 — but capped at each institute's best TWO
+// placings within this same block: a school's 3rd (or worse) finisher in
+// one event scores 0 regardless of their raw rank, so one dominant school
+// can't sweep every point in a single event. Only meaningful for a Final
+// (a Heat/Semifinal's Rank is just bib-typing/arrival order, not a real
+// placing) — callers only invoke this for a Final block (same isFinalBlock
+// gate already used for the Started checkbox). Shared by buildCategorySheet()
+// and addHeatToEvent() (spot-entry Finals need the exact same formula).
+function pointsFormula(rowNum, blockStartRow, blockEndRow) {
+  const basePoints =
+    'IFS($D' + rowNum + '=1,7,$D' + rowNum + '=2,5,$D' + rowNum + '=3,4,$D' + rowNum + '=4,3,' +
+    '$D' + rowNum + '=5,2,$D' + rowNum + '=6,1,$D' + rowNum + '>=7,0)';
+  // How many OTHER rows in this same block share this row's School and
+  // already have a numerically better (lower) Rank — 0 or 1 means this
+  // row is that school's best or 2nd-best placing here (keep the points);
+  // 2+ means a 3rd (or worse) placing from the same school (zero it out).
+  const schoolBetterCount =
+    'COUNTIFS($C$' + blockStartRow + ':$C$' + blockEndRow + ',$C' + rowNum + ',' +
+    '$D$' + blockStartRow + ':$D$' + blockEndRow + ',"<"&$D' + rowNum + ')';
+  return '=IF($D' + rowNum + '="","",IF(' + schoolBetterCount + '<=1,' + basePoints + ',0))';
 }
 
 function protectFormulaRanges(sheet, totalRows, dataRowRanges) {
@@ -408,6 +540,13 @@ function protectFormulaRanges(sheet, totalRows, dataRowRanges) {
     sheet.getRange(rr.start, 7, rr.count, 2).protect().setWarningOnly(true);
   });
   sheet.getRange(1, 10, totalRows, 2).protect().setWarningOnly(true); // hidden Event, Heat
+  // Points formula (L) — same warning-only protection as the other
+  // formula columns above, applied uniformly across every block's data
+  // rows even though non-Final blocks leave it blank (matches how
+  // Time/Started is already protected the same way regardless of block type).
+  dataRowRanges.forEach(function (rr) {
+    sheet.getRange(rr.start, 12, rr.count, 1).protect().setWarningOnly(true);
+  });
 }
 
 /** True if any data row in this (already-generated, new-layout) tab has a typed Bib. */
@@ -423,6 +562,7 @@ function tabHasTypedData(sheet) {
 function resetGroupTab(sheet) {
   sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { p.remove(); });
   sheet.createDeveloperMetadataFinder().withKey(GROUP_TAB_METADATA_KEY).find().forEach(function (m) { m.remove(); });
+  sheet.createDeveloperMetadataFinder().withKey(GROUP_TAB_EVENTS_KEY).find().forEach(function (m) { m.remove(); });
   sheet.showColumns(1, sheet.getMaxColumns());
   sheet.clear();
 }
@@ -435,6 +575,24 @@ function isGroupTab(sheet) {
 }
 function groupTabCategory(sheet) {
   const found = sheet.createDeveloperMetadataFinder().withKey(GROUP_TAB_METADATA_KEY).find();
+  return found.length ? found[0].getValue() : "";
+}
+
+// A stable string summarizing which events/entrant-counts a category tab was
+// built from, so a re-run can tell "roster unchanged for this category,
+// skip it" apart from "roster changed, needs a real rebuild" — without this,
+// a tab with no typed bib yet (the normal state right after generation) gets
+// reset+rebuilt on every single re-run, which turns a large roster that
+// needs multiple retries (see buildCategorySheet's execution-time comment)
+// into a death spiral that never finishes.
+function eventsSignature(eventCounts) {
+  return Object.keys(eventCounts).sort().map(function (k) { return k + ":" + eventCounts[k]; }).join("|");
+}
+function markGroupTabEvents(sheet, signature) {
+  sheet.addDeveloperMetadata(GROUP_TAB_EVENTS_KEY, signature, SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
+}
+function groupTabEventsSignature(sheet) {
+  const found = sheet.createDeveloperMetadataFinder().withKey(GROUP_TAB_EVENTS_KEY).find();
   return found.length ? found[0].getValue() : "";
 }
 
@@ -610,13 +768,17 @@ function pushGroupTabsToResults() {
   var finisherCount = 0;
 
   // Any block considered "started" but not yet a completed push is a
-  // candidate to announce as "Live". Track has no reliable "started" signal
-  // beyond someone typing a bib, so that's still the trigger there. Field
-  // events often have bibs listed well before the competition actually
-  // begins, so those use the explicit Started checkbox instead — see the
-  // loop below for the guards that keep this from ever downgrading an
-  // already-Completed race.
+  // candidate to announce as "Live". A Final block (Track or Field) has no
+  // reliable "started" signal beyond bib presence for a Heat/Semifinal, but
+  // a Final's bibs are typically typed in well before the race actually
+  // begins (announcing who qualified) — so Finals use the explicit Started
+  // checkbox instead, and a Final with bibs typed but not yet Started is a
+  // "Finalist" candidate (qualified lineup known, not yet running) rather
+  // than a Live one. See the loop below for the guards that keep any of
+  // this from ever downgrading an already-Completed (or already-announced)
+  // race.
   const liveCandidates = {}; // event_key -> { event, category, round, scheduledAt }
+  const finalistCandidates = {}; // event_key -> { event, category, round, scheduledAt, finishers: [{bib,name,school}] }
 
   sheets.forEach(function (sheet) {
     const category = groupTabCategory(sheet) || sheet.getName();
@@ -629,14 +791,28 @@ function pushGroupTabsToResults() {
       const bib = String(row[0]).trim();
       const result = String(row[4]).trim();
       const time = row[6]; // G — Time, mirrored from the block header
-      const started = row[7] === true; // H — Started, mirrored from the block header (Field only)
+      const started = row[7] === true; // H — Started, mirrored from the block header (Final blocks only)
 
       const roundLabel = normalizeHeatLabel(heat || "Final");
       const eventKey = slugify([eventName, category, roundLabel].join(" "));
-      const isTrack = classifyDiscipline(eventName) === "Track";
+      const isFinalBlock = roundLabel === "Final";
 
-      const startedSignal = isTrack ? !!bib : started;
-      if (startedSignal && !liveCandidates[eventKey]) {
+      if (isFinalBlock) {
+        if (started) {
+          if (!liveCandidates[eventKey]) {
+            liveCandidates[eventKey] = { event: eventName, category: category, round: roundLabel, scheduledAt: time };
+          }
+        } else if (bib) {
+          if (!finalistCandidates[eventKey]) {
+            finalistCandidates[eventKey] = { event: eventName, category: category, round: roundLabel, scheduledAt: time, finishers: [] };
+          }
+          finalistCandidates[eventKey].finishers.push({
+            bib: bib, name: String(row[1]).trim(), school: String(row[2]).trim(),
+          });
+        }
+      } else if (bib && !liveCandidates[eventKey]) {
+        // Track Heat/Semifinal — unchanged: no Started checkbox exists for
+        // these rows, so a typed bib is still the only "started" signal.
         liveCandidates[eventKey] = { event: eventName, category: category, round: roundLabel, scheduledAt: time };
       }
 
@@ -680,7 +856,30 @@ function pushGroupTabsToResults() {
     ]);
   });
 
-  if (raceOrder.length === 0 && liveRows.length === 0) {
+  // Unlike the Live placeholder above, a Finalist announcement DOES carry
+  // the qualified bib/name/school — that's the entire point (showing who
+  // made the final before it runs). The "already Finalist" guard (not just
+  // Completed/Live) keeps a re-run from appending the same qualifier list
+  // again every time nothing's changed; once Started is later checked, the
+  // SAME event_key instead matches the Live branch above (whose guard never
+  // excludes "Finalist"), so the Finalist→Live transition still fires.
+  const finalistRows = [];
+  var finalistEventCount = 0;
+  Object.keys(finalistCandidates).forEach(function (key) {
+    if (races[key]) return; // becoming Completed in this very run
+    if (liveCandidates[key]) return; // also became Live in this very run — Live wins
+    if (statuses[key] === "Completed" || statuses[key] === "Live" || statuses[key] === "Finalist") return;
+    finalistEventCount++;
+    const c = finalistCandidates[key];
+    c.finishers.forEach(function (f, i) {
+      finalistRows.push(i === 0
+        ? [key, c.event, c.category, parseGenderFromCategory(c.category), c.event, c.round, "", "", "Finalist", toIso(c.scheduledAt), "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", ""]
+        : ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", ""]
+      );
+    });
+  });
+
+  if (raceOrder.length === 0 && liveRows.length === 0 && finalistRows.length === 0) {
     maybeAlert("Nothing new to push — no typed Bibs, and no rows with both Bib and Result filled (and not already Pushed).");
     return;
   }
@@ -704,6 +903,7 @@ function pushGroupTabsToResults() {
     });
   });
   outRows.push.apply(outRows, liveRows);
+  outRows.push.apply(outRows, finalistRows);
 
   const results = ensureResultsSheet(ss);
   const headers = resultsHeaders();
@@ -713,12 +913,72 @@ function pushGroupTabsToResults() {
 
   var summary = "Pushed " + raceOrder.length + " race(s), " + finisherCount + " finisher row(s), to \"" + SHEET_NAME + "\".";
   if (liveRows.length) summary += "\nMarked " + liveRows.length + " race(s) as Live (bibs typed, not finished yet).";
+  if (finalistRows.length) summary += "\nAnnounced " + finalistEventCount + " Final(s) with a qualified lineup (not yet started).";
   summary += "\n\nPublishing to the live site now…";
   maybeAlert(summary);
 
   // sendToSite is defined in live-results-apps-script.gs (same Apps Script
   // project) — reused as-is so "push" and "go live" happen in one click.
   sendToSite(true);
+}
+
+/* ── View "qualified to Finals" races (Status = Finalist) ─────────────────── */
+
+/**
+ * A basic Sheets filter on the "Results" tab, scoped to Status = "Finalist" —
+ * every Final whose qualified lineup is already known but hasn't started
+ * yet (see pushGroupTabsToResults()). This is the same underlying data the
+ * live site's "Qualified" filter pill shows; this just gives the same view
+ * inside the spreadsheet itself. Apps Script only exposes the single
+ * sheet-wide "basic filter" (not the newer named Filter Views feature), so
+ * running this replaces whatever filter is currently on the Results tab.
+ */
+function viewFinalistRaces() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    maybeAlert('No "' + SHEET_NAME + '" tab yet — push some results first.');
+    return;
+  }
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    maybeAlert('"' + SHEET_NAME + '" has no data rows yet.');
+    return;
+  }
+  const headerIdx = mapHeaders(values[0], { status: COLS.status });
+  if (headerIdx.status === undefined) {
+    maybeAlert('Could not find the "' + COLS.status + '" column in "' + SHEET_NAME + '".');
+    return;
+  }
+
+  const existing = sheet.getFilter();
+  if (existing) existing.remove();
+
+  const filter = sheet.getDataRange().createFilter();
+  filter.setColumnFilterCriteria(
+    headerIdx.status + 1,
+    SpreadsheetApp.newFilterCriteria().whenTextEqualTo("Finalist").build(),
+  );
+
+  ss.setActiveSheet(sheet);
+  maybeAlert(
+    'Showing only "Finalist" races in "' + SHEET_NAME + '" — qualified lineup known, not yet started.' +
+    '\n\nRun "Show all races (clear filter)" to go back to everything.',
+  );
+}
+
+/** Removes whatever basic filter is currently on the Results tab, if any. */
+function clearResultsFilter() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) return;
+  const existing = sheet.getFilter();
+  if (existing) {
+    existing.remove();
+    maybeAlert("Filter cleared — showing all races in \"" + SHEET_NAME + "\" again.");
+  } else {
+    maybeAlert("No filter was active on \"" + SHEET_NAME + "\".");
+  }
 }
 
 /* ── Add a heat to an already-generated event (spot entries on the day) ──── */
@@ -791,30 +1051,35 @@ function addHeatToEvent() {
   const nameColLetter = columnToLetter(headerIdx.name + 1);
   const institutionColLetter = columnToLetter(headerIdx.institution + 1);
 
-  const isFieldBlock = classifyDiscipline(eventName) !== "Track";
+  // Same rule as buildCategorySheet(): Started only matters for a Final
+  // block (Track or Field) — a Heat/Semifinal spot entry never gets one,
+  // matching the operator's own free-typed round label here, not discipline.
+  const isFinalBlock = roundLabel === "Final";
 
   // Append after a blank spacer row, same convention as generated blocks.
   const headerRow = sheet.getLastRow() + 2;
   const columnHeaderRow = headerRow + 1;
   const dataStart = headerRow + 2;
 
-  sheet.getRange(headerRow, 1, 1, 11).setValues([[
-    eventName + " — " + roundLabel, "", "", "", "", "", "", "", "", "", "",
+  sheet.getRange(headerRow, 1, 1, 12).setValues([[
+    eventName + " — " + roundLabel, "", "", "", "", "", "", "", "", "", "", "",
   ]]);
-  sheet.getRange(headerRow, 1, 1, 11).setFontWeight("bold");
+  sheet.getRange(headerRow, 1, 1, 12).setFontWeight("bold");
   sheet.getRange(headerRow, 1, 1, 6).merge(); // A:F — leaves G/H free for Time/Started, same as a generated block
 
-  sheet.getRange(columnHeaderRow, 1, 1, 11).setValues([[
-    "Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "",
+  sheet.getRange(columnHeaderRow, 1, 1, 12).setValues([[
+    "Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points",
   ]]);
-  sheet.getRange(columnHeaderRow, 1, 1, 11).setFontWeight("bold");
+  sheet.getRange(columnHeaderRow, 1, 1, 12).setFontWeight("bold");
 
   const mainRows = [];
   const formulaRows = [];
   const mirrorRows = [];
+  const pointsRows = [];
+  const blockEndRow = dataStart + rowCount - 1;
   for (var i = 0; i < rowCount; i++) {
     const rowNum = dataStart + i;
-    mainRows.push(["", "", "", "", "", "", "", "", false, eventName, roundLabel]);
+    mainRows.push(["", "", "", "", "", "", "", "", false, eventName, roundLabel, ""]);
     formulaRows.push([
       '=IFERROR(INDEX(Roster!$' + nameColLetter + ':$' + nameColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
       '=IFERROR(INDEX(Roster!$' + institutionColLetter + ':$' + institutionColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
@@ -822,19 +1087,22 @@ function addHeatToEvent() {
     ]);
     mirrorRows.push([
       '=IF($G$' + headerRow + '="","",$G$' + headerRow + ')',
-      isFieldBlock ? '=$H$' + headerRow : "",
+      isFinalBlock ? '=$H$' + headerRow : "",
     ]);
+    if (isFinalBlock) pointsRows.push([pointsFormula(rowNum, dataStart, blockEndRow)]);
   }
-  sheet.getRange(dataStart, 1, rowCount, 11).setValues(mainRows);
+  sheet.getRange(dataStart, 1, rowCount, 12).setValues(mainRows);
   sheet.getRange(dataStart, 2, rowCount, 3).setFormulas(formulaRows);
   sheet.getRange(dataStart, 7, rowCount, 2).setFormulas(mirrorRows);
   sheet.getRange(dataStart, 9, rowCount, 1).insertCheckboxes(); // I Pushed
-  if (isFieldBlock) sheet.getRange(headerRow, 8, 1, 1).insertCheckboxes(); // H Started (Field only)
+  if (isFinalBlock) sheet.getRange(headerRow, 8, 1, 1).insertCheckboxes(); // H Started (Final blocks only)
+  if (isFinalBlock) sheet.getRange(dataStart, 12, rowCount, 1).setFormulas(pointsRows); // L Points (Final blocks only)
 
   // Scoped to just the newly added rows — deliberately not touching the
   // sheet's original protections, so there's no overlap to reason about.
   sheet.getRange(dataStart, 2, rowCount, 3).protect().setWarningOnly(true); // Athlete, School, Rank
   sheet.getRange(dataStart, 7, rowCount, 2).protect().setWarningOnly(true); // Time, Started mirror
+  sheet.getRange(dataStart, 12, rowCount, 1).protect().setWarningOnly(true); // Points
   sheet.getRange(headerRow, 10, rowCount + 2, 2).protect().setWarningOnly(true); // hidden Event, Heat
 
   // Announce it immediately — same as generateCategoryTabs() — so there's
@@ -916,6 +1184,7 @@ function upgradeExistingCategorySheets() {
     ss.deleteSheet(sheet);
     const fresh = ss.insertSheet(category);
     buildCategorySheet(fresh, category, grouped.groups[category], bibColLetter, nameColLetter, institutionColLetter, heatPlan);
+    markGroupTabEvents(fresh, eventsSignature(grouped.groups[category]));
 
     const replay = replayCapturedData(fresh, captured);
     upgraded.push(category + " (" + replay.replayed + "/" + captured.length + " row(s) carried over)");
@@ -1005,8 +1274,12 @@ function replayCapturedData(sheet, captured) {
 }
 
 function parseGenderFromCategory(category) {
-  if (/BOY/i.test(category)) return "Boys";
+  // WOMEN must be checked before MEN — "WOMEN" contains "MEN" as a
+  // substring, so testing MEN first would mislabel an Open Women category.
   if (/GIRL/i.test(category)) return "Girls";
+  if (/WOMEN/i.test(category)) return "Women";
+  if (/BOY/i.test(category)) return "Boys";
+  if (/MEN/i.test(category)) return "Men";
   return "";
 }
 

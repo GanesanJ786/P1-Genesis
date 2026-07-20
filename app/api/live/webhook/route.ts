@@ -38,7 +38,7 @@ type LiveResultPayload = {
   media?: unknown;
 };
 
-const VALID_STATUSES = ["upcoming", "in_progress", "paused", "completed"] as const;
+const VALID_STATUSES = ["upcoming", "finalist", "in_progress", "paused", "completed"] as const;
 const STATUS_ALIASES: Record<string, (typeof VALID_STATUSES)[number]> = {
   live: "in_progress",
 };

@@ -14,19 +14,28 @@ import { createClient } from "@/lib/supabase/client";
 import { ResultCard } from "@/components/public/ResultCard";
 import { LiveRoundRow } from "@/components/public/LiveRoundRow";
 import { AnnouncementsFeed } from "@/components/public/AnnouncementsFeed";
-import { MedalTally } from "@/components/public/MedalTally";
 import { Countdown } from "@/components/public/Countdown";
 import { ScheduleTimeline } from "@/components/public/ScheduleTimeline";
+import { MeetOverview } from "@/components/public/MeetOverview";
+import { TournamentGallery } from "@/components/public/TournamentGallery";
 import {
   normalizeLiveItem,
   computeMedalTally,
+  computeMeetStats,
+  computeIndividualResults,
   scheduleComparator,
   formatScheduledTime,
   parseFinishers,
   isFinalHeat,
+  roundRank,
+  roundNumber,
+  eventSortKey,
+  categorySortKey,
+  genderSortKey,
   type LiveRow,
   type AnnouncementRow,
 } from "@/lib/live";
+import { IndividualResultsList, type RoundFilter } from "@/components/public/IndividualResultsList";
 
 type BoardEvent = { id: string; slug: string; title: string; showSchedule: boolean };
 type Props = {
@@ -35,12 +44,13 @@ type Props = {
   initialAnnouncements: AnnouncementRow[];
 };
 
-type StatusFilter = "all" | "upcoming" | "live" | "completed" | "finals";
+type StatusFilter = "all" | "upcoming" | "live" | "completed" | "finals" | "finalist";
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "finals", label: "Finals" },
   { key: "live", label: "Live" },
+  { key: "finalist", label: "Qualified" },
   { key: "upcoming", label: "Upcoming" },
   { key: "completed", label: "Done" },
 ];
@@ -118,26 +128,6 @@ type GenderGroup = {
   doneRounds: number;
 };
 
-/** Round progression order within an event: heats → quarters → semis → final. */
-function roundRank(heat: string | null): number {
-  const h = (heat || "").toLowerCase();
-  if (h.includes("heat")) return 1;
-  if (h.includes("quarter")) return 2;
-  if (h.includes("semi")) return 3; // must precede the "final" check ("semifinal")
-  if (h.includes("final")) return 5;
-  return 4;
-}
-
-/** Numeric part of a round label ("Heat 4" -> 4, "Semifinal 2" -> 2) — every
- *  heat/semifinal shares the same roundRank(), so without this they only
- *  sort by day/sort_order, which ties for every Quick-Entry-pushed row
- *  (sort_order is always 0) and left heats ordered by push time instead of
- *  heat number (e.g. "Heat 1, Heat 4, Heat 7" — insertion order, not 1-2-3). */
-function roundNumber(heat: string | null): number {
-  const m = /(\d+)/.exec(heat || "");
-  return m ? Number(m[1]) : 0;
-}
-
 /** Category/Gender/Event header badge. Under a status filter (Done/Live/
  *  Upcoming/Finals), the group being counted is already narrowed to that
  *  status, so "done" is trivially the whole count (e.g. "9/9 done" on every
@@ -148,35 +138,6 @@ function roundsBadge(done: number, total: number, status: StatusFilter): string 
   if (status === "all") return `${done}/${total} done`;
   const label = STATUS_FILTERS.find((s) => s.key === status)?.label ?? status;
   return `${total} ${label}`;
-}
-
-// Field events are sometimes named with a leading number that isn't a race
-// distance at all (e.g. "5M RUNNING LONG JUMP" = a short run-up long jump,
-// not a 5m dash) — checked first so those never get sorted in among actual
-// track distances just because the name happens to start with a digit.
-const FIELD_EVENT_KEYWORDS = /JUMP|THROW|PUT|SHOT|DISCUS|JAVELIN|CBT/i;
-
-/** Leading number in an event/discipline name ("100M" -> 100, "60M" -> 60);
- *  field events (Long Jump, Shot Put, ...) always sort after all track events. */
-function eventSortKey(name: string): number {
-  const trimmed = name.trim();
-  if (FIELD_EVENT_KEYWORDS.test(trimmed)) return Infinity;
-  const m = /^(\d+(?:\.\d+)?)/.exec(trimmed);
-  return m ? Number(m[1]) : Infinity;
-}
-
-/** Any number found in a category label ("U-14" -> 14, "BOYS10" -> 10);
- *  age-unrestricted categories ("Open", with no digits) sort last. */
-function categorySortKey(category: string): number {
-  const m = /(\d+)/.exec(category);
-  return m ? Number(m[1]) : Infinity;
-}
-
-function genderSortKey(gender: string): number {
-  const g = gender.trim().toLowerCase();
-  if (g === "boys" || g === "men" || g === "male") return 0;
-  if (g === "girls" || g === "women" || g === "female") return 1;
-  return 2;
 }
 
 function buildProgramme(rows: LiveRow[]): GenderGroup[] {
@@ -354,10 +315,32 @@ function FilterChips({
   );
 }
 
+type PageTab = "live" | "overview" | "results" | "gallery";
+const PAGE_TABS: { key: PageTab; label: string }[] = [
+  { key: "live", label: "Live" },
+  { key: "overview", label: "Overview" },
+  { key: "results", label: "Results" },
+  { key: "gallery", label: "Gallery" },
+];
+
 export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Props) {
   const [items, setItems] = useState<LiveRow[]>(initialItems);
   const [announcements, setAnnouncements] =
     useState<AnnouncementRow[]>(initialAnnouncements);
+  // Top-level page section — independent of activeStatus (Finals/Live/
+  // Upcoming/Done), which stays scoped to browsing inside the Live tab.
+  const [activeTab, setActiveTab] = useState<PageTab>("live");
+  // Results tab's own Institution/Category/Event dropdown filters — kept
+  // separate from the Live tab's activeCategory/activeGender/activeDiscipline
+  // chips, since the two tabs filter conceptually different things (a
+  // status-driven programme vs. a flat historical log) and sharing state
+  // would cause confusing cross-tab side effects.
+  const [resultsInstitution, setResultsInstitution] = useState<string | null>(null);
+  const [resultsCategory, setResultsCategory] = useState<string | null>(null);
+  const [resultsEvent, setResultsEvent] = useState<string | null>(null);
+  // Defaults to Finalists, not All — a spectator/institution checking results
+  // almost always wants final placings first, not every heat mixed in.
+  const [resultsRound, setResultsRound] = useState<RoundFilter>("finalists");
   const [activeDay, setActiveDay] = useState(1);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
@@ -379,6 +362,29 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   // full screen of vertical space before any result shows, so they collapse
   // behind a "Filters" toggle. Kept open on larger screens (see the panel).
   const [showFilters, setShowFilters] = useState(false);
+  // The Filters toggle lives in the sticky search bar, but the panel itself
+  // renders further down in normal flow — if the page is scrolled deep into
+  // the results, opening it doesn't move the viewport at all, so it looks
+  // like nothing happened. Scroll it into view whenever it opens.
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  // A tab's content length varies a lot (a long nested programme vs. a short
+  // stat grid) — switching tabs while scrolled deep into a long one can
+  // strand the viewport below the new (shorter) tab's content, in whatever
+  // comes after this component on the page. Scroll the tab bar back into
+  // view on every tab change, not just user clicks — the "View" drill-down
+  // from a MedalTally row switches tabs programmatically too.
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const isFirstTabRender = useRef(true);
+  useEffect(() => {
+    if (isFirstTabRender.current) {
+      isFirstTabRender.current = false; // don't force-scroll on initial page load
+      return;
+    }
+    tabBarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeTab]);
+  useEffect(() => {
+    if (showFilters) filterPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [showFilters]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   // Whether the Realtime channel is currently subscribed. When it is, the poll
   // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
@@ -614,7 +620,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   // leaves this set the moment admin marks it live.
   const nextUp = useMemo(() => {
     return items
-      .filter((r) => r.status === "upcoming" && r.scheduled_at)
+      .filter((r) => (r.status === "upcoming" || r.status === "finalist") && r.scheduled_at)
       .sort(
         (a, b) =>
           new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime(),
@@ -622,6 +628,43 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   }, [items]);
 
   const medalTally = useMemo(() => computeMedalTally(items), [items]);
+  const meetStats = useMemo(
+    () => computeMeetStats(items, medalTally),
+    [items, medalTally],
+  );
+
+  // Results tab: meet-wide (not day-filtered), same scope as Overview/Gallery —
+  // switching days shouldn't make medal-tally-style data disappear.
+  const individualResults = useMemo(() => computeIndividualResults(items), [items]);
+  const resultsInstitutions = useMemo(
+    () =>
+      Array.from(new Set(individualResults.map((r) => r.school).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [individualResults],
+  );
+  const resultsCategories = useMemo(
+    () =>
+      Array.from(new Set(individualResults.map((r) => r.category))).sort(
+        (a, b) => categorySortKey(a) - categorySortKey(b) || a.localeCompare(b),
+      ),
+    [individualResults],
+  );
+  const resultsEvents = useMemo(
+    () =>
+      Array.from(new Set(individualResults.map((r) => r.event))).sort(
+        (a, b) => eventSortKey(a) - eventSortKey(b) || a.localeCompare(b),
+      ),
+    [individualResults],
+  );
+  const handleViewInstitution = (school: string) => {
+    setActiveTab("results");
+    setResultsInstitution(school);
+    setResultsCategory(null);
+    setResultsEvent(null);
+    setResultsRound("finalists");
+    setQuery("");
+  };
 
   // Build the nested Category → Gender → Event → Round programme from the
   // filtered set. The status filter narrows which rounds get grouped.
@@ -629,17 +672,19 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     const set =
       activeStatus === "upcoming"
         ? filtered.filter((r) => r.status === "upcoming")
-        : activeStatus === "completed"
-          ? filtered.filter((r) => r.status === "completed")
-          : activeStatus === "live"
-            ? filtered.filter(
-                (r) => r.status === "in_progress" || r.status === "paused",
-              )
-            : activeStatus === "finals"
+        : activeStatus === "finalist"
+          ? filtered.filter((r) => r.status === "finalist")
+          : activeStatus === "completed"
+            ? filtered.filter((r) => r.status === "completed")
+            : activeStatus === "live"
               ? filtered.filter(
-                  (r) => isFinalHeat(r.heat_label) && r.status === "completed",
+                  (r) => r.status === "in_progress" || r.status === "paused",
                 )
-              : filtered;
+              : activeStatus === "finals"
+                ? filtered.filter(
+                    (r) => isFinalHeat(r.heat_label) && r.status === "completed",
+                  )
+                : filtered;
     return buildProgramme(set);
   }, [filtered, activeStatus]);
 
@@ -660,7 +705,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     const rank = (s: LiveRow) =>
       s.status === "in_progress" || s.status === "paused"
         ? 0
-        : s.status === "upcoming"
+        : s.status === "upcoming" || s.status === "finalist"
           ? 1
           : 2;
     return items
@@ -707,8 +752,29 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
         </div>
       ) : (
         <>
+          {/* Top-level sections — search overrides all of them while active,
+              since it's a cross-cutting "jump to X" utility, not tab content. */}
+          <div ref={tabBarRef} className="flex gap-2 scroll-mt-4">
+            {PAGE_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  setQuery("");
+                }}
+                className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-all active:scale-95 ${
+                  activeTab === tab.key
+                    ? "bg-ember text-white shadow-sm shadow-ember/30"
+                    : "bg-ink-soft text-sand hover:text-cream"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           {/* Now Running & Next up — hidden while searching to keep focus */}
-          {!q && allRunning.length > 0 ? (
+          {!q && activeTab === "live" && allRunning.length > 0 ? (
             <section>
               <p className="eyebrow mb-4 flex items-center gap-2">
                 <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
@@ -722,7 +788,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
             </section>
           ) : null}
 
-          {!q && nextUp ? (
+          {!q && activeTab === "live" && nextUp ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-2xl border border-sand/10 bg-ink-soft px-5 py-3.5 text-sm">
               <span className="inline-flex items-center gap-2 text-[0.65rem] uppercase tracking-widest text-sand/60">
                 <CalendarClock size={13} className="text-ember" /> Next up
@@ -739,7 +805,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
             </div>
           ) : null}
 
-          {!q && event.showSchedule ? (
+          {!q && activeTab === "live" && event.showSchedule ? (
             <ScheduleTimeline items={items} eventTitle={event.title} />
           ) : null}
 
@@ -769,7 +835,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </button>
               ) : null}
             </div>
-            {!q ? (
+            {!q && activeTab === "live" ? (
               <div className="flex items-center gap-2">
                 <div className="snap-rail -mx-1 flex flex-1 gap-2 overflow-x-auto px-1">
                   {STATUS_FILTERS.map((s) => (
@@ -810,7 +876,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
           </div>
 
           {q ? (
-            /* ── Search results ─────────────────────────────────────────── */
+            /* ── Search results — overrides every tab while active ───────── */
             <section>
               <p className="mb-3 text-sm text-sand">
                 {searchResults.length} result{searchResults.length === 1 ? "" : "s"} for
@@ -834,8 +900,32 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </p>
               )}
             </section>
+          ) : activeTab === "overview" ? (
+            <MeetOverview
+              stats={meetStats}
+              medalRows={medalTally}
+              onViewInstitution={handleViewInstitution}
+            />
+          ) : activeTab === "results" ? (
+            <IndividualResultsList
+              rows={individualResults}
+              institutions={resultsInstitutions}
+              categories={resultsCategories}
+              events={resultsEvents}
+              institution={resultsInstitution}
+              category={resultsCategory}
+              event={resultsEvent}
+              round={resultsRound}
+              onInstitutionChange={setResultsInstitution}
+              onCategoryChange={setResultsCategory}
+              onEventChange={setResultsEvent}
+              onRoundChange={setResultsRound}
+              eventTitle={event.title}
+            />
+          ) : activeTab === "gallery" ? (
+            <TournamentGallery items={items} />
           ) : (
-            /* ── Browse: day tabs, filters, grouped programme ───────────── */
+            /* ── Live tab: day tabs, filters, grouped programme ──────────── */
             <>
               {days.length > 1 ? (
                 <div className="flex gap-2">
@@ -856,7 +946,10 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
               ) : null}
 
               {hasFilterOptions && showFilters ? (
-                <div className="space-y-4 rounded-2xl border border-sand/10 bg-ink-soft p-5">
+                <div
+                  ref={filterPanelRef}
+                  className="scroll-mt-32 space-y-4 rounded-2xl border border-sand/10 bg-ink-soft p-5"
+                >
                   <FilterChips
                     label="Age Group"
                     options={categories}
@@ -990,8 +1083,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                     : "No events match the selected filters."}
                 </p>
               ) : null}
-
-              <MedalTally rows={medalTally} />
             </>
           )}
         </>

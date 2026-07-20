@@ -92,6 +92,9 @@ function onOpen() {
     .addSeparator()
     .addItem("Add heat to an event (spot entries)", "addHeatToEvent")
     .addItem("Upgrade existing sheets for Time/Started columns", "upgradeExistingCategorySheets")
+    .addSeparator()
+    .addItem("View \"qualified to Finals\" races", "viewFinalistRaces")
+    .addItem("Show all races (clear filter)", "clearResultsFilter")
     .addToUi();
 }
 
@@ -240,14 +243,30 @@ function buildPayload() {
 
     if (athlete) {
       const rankRaw = String(raw(row, "rank")).trim();
-      g.results.push({
+      const bib = String(raw(row, "bib")).trim();
+      const finisher = {
         rank: rankRaw ? Number(rankRaw) : g.results.length + 1,
-        bib: String(raw(row, "bib")).trim(),
+        bib: bib,
         name: athlete,
         school: String(raw(row, "school")).trim(),
         result: String(raw(row, "result")).trim(),
         record: String(raw(row, "record")).trim().toUpperCase(),
+      };
+      // A "Finalist" row-group (qualified lineup, no result yet) and the
+      // Completed row-group that eventually replaces it both share this
+      // event_key — without this, buildPayload's full-history rescan would
+      // include BOTH, duplicating every athlete once as a pre-race
+      // announcement and again as the real result. Keyed by bib (falling
+      // back to name) so a later row for the same athlete replaces the
+      // earlier one instead of appending a duplicate. No-op for every other
+      // existing flow — Upcoming/Live placeholders never carry an athlete
+      // name, so this key never collides for them.
+      const dedupeKey = bib || athlete.toLowerCase();
+      const existingIdx = g.results.findIndex(function (f) {
+        return (f.bib || f.name.toLowerCase()) === dedupeKey;
       });
+      if (existingIdx >= 0) g.results[existingIdx] = finisher;
+      else g.results.push(finisher);
     }
   }
 
@@ -336,8 +355,17 @@ function slugify(s) {
 }
 // Sheet date/time → ISO in stadium time (IST). Non-dates are skipped.
 function toIso(val) {
-  const d = val instanceof Date ? val : val ? new Date(val) : null;
+  var d = val instanceof Date ? val : val ? new Date(val) : null;
   if (!d || isNaN(d.getTime())) return "";
+  // A Time cell with only a time typed in (no date) is stored by Sheets with
+  // the date portion defaulted to its own internal epoch, Dec 30 1899 — used
+  // as-is, that pushes a bogus 19th-century timestamp instead of today's
+  // scheduled time. Keep the typed hour/minute/second, swap in today's real
+  // calendar date whenever this sentinel year shows up.
+  if (d.getFullYear() === 1899) {
+    const today = new Date();
+    d = new Date(today.getFullYear(), today.getMonth(), today.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
+  }
   return Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 function maybeAlert(msg) {

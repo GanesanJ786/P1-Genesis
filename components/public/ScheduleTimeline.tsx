@@ -127,7 +127,7 @@ export function ScheduleTimeline({
               <p className="text-sm font-semibold text-cream">
                 {r.scheduled_at ? formatScheduledTime(r.scheduled_at) : "TBA"}
               </p>
-              {r.status === "upcoming" && r.scheduled_at ? (
+              {(r.status === "upcoming" || r.status === "finalist") && r.scheduled_at ? (
                 <Countdown iso={r.scheduled_at} className="mt-0.5" />
               ) : (
                 <span

@@ -22,10 +22,11 @@ export function ResultCard({ result }: { result: LiveRow }) {
   const heatLabel = result.heat_label;
   const isFinal = isFinalHeat(heatLabel);
   const isUpcoming = result.status === "upcoming";
+  const isFinalistStage = result.status === "finalist";
   const isCompleted = result.status === "completed";
   const media = isCompleted ? liveItemMedia(result) : [];
   const hasMeta =
-    (isUpcoming && result.scheduled_at) ||
+    ((isUpcoming || isFinalistStage) && result.scheduled_at) ||
     result.venue ||
     result.wind ||
     result.participants_count;
@@ -78,7 +79,7 @@ export function ResultCard({ result }: { result: LiveRow }) {
       {/* Schedule meta: time/venue/wind/participants */}
       {hasMeta ? (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-sand">
-          {isUpcoming && result.scheduled_at ? (
+          {(isUpcoming || isFinalistStage) && result.scheduled_at ? (
             <span className="font-medium text-cream/90">
               {formatScheduledTime(result.scheduled_at)}
             </span>
@@ -101,18 +102,18 @@ export function ResultCard({ result }: { result: LiveRow }) {
         </div>
       ) : null}
 
-      {isUpcoming && result.scheduled_at ? (
+      {(isUpcoming || isFinalistStage) && result.scheduled_at ? (
         <Countdown iso={result.scheduled_at} className="mt-2" />
       ) : null}
 
       {/* Finishers list (top 6) */}
       {finishers.length > 0 ? (
         <div className="mt-4 flex-1">
-          <FinisherList finishers={finishers} isFinal={isFinal} />
+          <FinisherList finishers={finishers} isFinal={isFinal && isCompleted} />
         </div>
       ) : (
         <p className="mt-4 flex-1 text-sm italic text-sand/60">
-          {isUpcoming ? "Yet to start" : "Results pending…"}
+          {isUpcoming || isFinalistStage ? "Yet to start" : "Results pending…"}
         </p>
       )}
 

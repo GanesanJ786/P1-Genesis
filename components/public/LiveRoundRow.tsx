@@ -63,6 +63,7 @@ export function LiveRoundRow({
   const isFinal = isFinalHeat(item.heat_label);
   const roundName = item.heat_label || "Final";
   const isUpcoming = item.status === "upcoming";
+  const isFinalistStage = item.status === "finalist";
   const isCompleted = item.status === "completed";
   const hasResults = finishers.length > 0;
   const podium = finishers.slice(0, PODIUM);
@@ -108,8 +109,20 @@ export function LiveRoundRow({
   // Share + Download PDF — rendered both in the collapsed peek and expanded view
   // so they never require drilling in to find. (Kept outside the toggle button
   // so they stay independently clickable — buttons can't nest.)
+  // A Finalist row already has finishers (the qualified lineup) — the
+  // header's own scheduled-time/Countdown display never reaches that case
+  // (it only shows when hasResults is false), so it's rendered separately
+  // here, right above the lineup, in both the collapsed peek and expanded view.
+  const finalistCountdown =
+    isFinalistStage && item.scheduled_at ? (
+      <div className="mb-2 flex items-center gap-2 text-xs text-sand">
+        <span className="font-medium text-cream/90">{formatScheduledTime(item.scheduled_at)}</span>
+        <Countdown iso={item.scheduled_at} />
+      </div>
+    ) : null;
+
   const actions =
-    allFinishers.length > 0 ? (
+    isCompleted && allFinishers.length > 0 ? (
       <div className="flex items-center gap-2">
         <ShareResultButton result={item} />
         <button
@@ -142,7 +155,8 @@ export function LiveRoundRow({
       {/* Collapsed peek — podium + Share/PDF, right under the row (no drill-in) */}
       {!open && hasResults ? (
         <div className="pb-3 pl-1 pr-1">
-          <FinisherList finishers={podium} isFinal={isFinal} highlight={highlight} />
+          {finalistCountdown}
+          <FinisherList finishers={podium} isFinal={isFinal && isCompleted} highlight={highlight} />
           <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
             {actions}
             {extra > 0 ? (
@@ -181,7 +195,10 @@ export function LiveRoundRow({
           ) : null}
 
           {hasResults ? (
-            <FinisherList finishers={finishers} isFinal={isFinal} highlight={highlight} />
+            <>
+              {finalistCountdown}
+              <FinisherList finishers={finishers} isFinal={isFinal && isCompleted} highlight={highlight} />
+            </>
           ) : (
             <p className="text-sm italic text-sand/60">
               {isUpcoming ? "Start list to be announced." : "Results pending…"}

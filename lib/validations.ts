@@ -39,7 +39,7 @@ export const liveItemSchema = z.object({
   heat_label: z.string().max(80).optional().or(z.literal("")),
   day: z.coerce.number().int().min(1).default(1),
   sort_order: z.coerce.number().int().default(0),
-  status: z.enum(["upcoming", "in_progress", "paused", "completed"]),
+  status: z.enum(["upcoming", "finalist", "in_progress", "paused", "completed"]),
   scheduled_at: z.string().optional().or(z.literal("")),
   venue: z.string().max(160).optional().or(z.literal("")),
   poc_name: z.string().max(120).optional().or(z.literal("")),

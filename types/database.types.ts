@@ -18,7 +18,7 @@ export type SponsorTier =
 export type BlogCategory = "news" | "results" | "stories" | "training";
 export type BlogStatus = "draft" | "published";
 export type ImageOrientation = "landscape" | "portrait";
-export type LiveStatus = "upcoming" | "in_progress" | "paused" | "completed";
+export type LiveStatus = "upcoming" | "finalist" | "in_progress" | "paused" | "completed";
 export type AnnouncementType = "info" | "delay" | "venue" | "safety" | "results";
 export type Json =
   | string
