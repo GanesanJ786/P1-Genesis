@@ -11,7 +11,7 @@
 -- Enums --------------------------------------------------------------------
 create type user_role as enum ('admin', 'staff', 'coach');
 create type event_status as enum ('draft', 'published', 'archived');
-create type sponsor_tier as enum ('title', 'platinum', 'gold', 'silver', 'supporter');
+create type sponsor_tier as enum ('title', 'platinum', 'gold', 'silver', 'bronze', 'medical', 'sound', 'partner', 'supporter');
 
 -- profiles (1:1 with auth.users) -------------------------------------------
 create table profiles (

@@ -13,6 +13,7 @@ export type SponsorTier =
   | "silver"
   | "bronze"
   | "medical"
+  | "sound"
   | "partner"
   | "supporter";
 export type BlogCategory = "news" | "results" | "stories" | "training";

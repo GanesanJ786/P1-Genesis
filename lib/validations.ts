@@ -79,6 +79,7 @@ export const sponsorSchema = z.object({
     "silver",
     "bronze",
     "medical",
+    "sound",
     "partner",
     "supporter",
   ]),

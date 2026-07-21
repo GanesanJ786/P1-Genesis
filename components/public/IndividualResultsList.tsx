@@ -118,6 +118,14 @@ export function IndividualResultsList({
 }) {
   const [pdfBusy, setPdfBusy] = useState(false);
 
+  // Not every meet uses every round stage (e.g. a meet with no Semifinals
+  // anywhere) — only offer a round chip when at least one row actually
+  // matches it, same reasoning as why the Institution/Category/Event
+  // dropdowns are built from real data rather than a fixed list.
+  const availableRoundFilters = ROUND_FILTERS.filter(
+    (f) => f.key === "all" || rows.some((r) => matchesRoundFilter(r, f.key)),
+  );
+
   const filtered = rows.filter(
     (r) =>
       (!institution || r.school === institution) &&
@@ -209,7 +217,7 @@ export function IndividualResultsList({
       </div>
 
       <div className="snap-rail -mx-1 mb-4 flex gap-2 overflow-x-auto px-1">
-        {ROUND_FILTERS.map((f) => (
+        {availableRoundFilters.map((f) => (
           <button
             key={f.key}
             onClick={() => onRoundChange(f.key)}

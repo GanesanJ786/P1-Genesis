@@ -22,6 +22,7 @@ const TIERS: { key: SponsorTier; label: string; level: Level }[] = [
   { key: "silver", label: "Silver Sponsors", level: "standard" },
   { key: "bronze", label: "Bronze Sponsors", level: "standard" },
   { key: "medical", label: "Medical Partner", level: "standard" },
+  { key: "sound", label: "Sound Partner", level: "standard" },
   { key: "partner", label: "Event Partners", level: "standard" },
   { key: "supporter", label: "Event Supporters", level: "standard" },
 ];
@@ -70,7 +71,7 @@ function LogoPlate({
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center overflow-hidden bg-cream",
+        "relative flex items-center justify-center overflow-hidden bg-cream bg-white",
         className,
       )}
     >
