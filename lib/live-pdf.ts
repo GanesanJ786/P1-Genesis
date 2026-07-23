@@ -361,7 +361,7 @@ export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string):
 /* -------------------------------------------------------------------------- */
 
 const INDIVIDUAL_RESULTS_HEAD = [
-  ["Round", "Event", "Category", "Gender", "Bib", "Athlete", "Institution", "Result", "Medal"],
+  ["Round", "Event", "Category", "Gender", "Pos", "Bib", "Athlete", "Institution", "Result", "Medal"],
 ];
 
 const MEDAL_LABEL: Record<"Gold" | "Silver" | "Bronze", string> = {
@@ -376,6 +376,7 @@ function individualResultRow(r: IndividualResultRow): string[] {
     r.event,
     r.category,
     r.gender,
+    String(r.rank),
     r.bib ?? "",
     r.name,
     r.school || "",
@@ -413,9 +414,10 @@ export async function downloadIndividualResultsPdf(
     alternateRowStyles: { fillColor: STRIPE },
     margin: { top: 16 },
     columnStyles: {
-      4: { cellWidth: 16, halign: "center" },
-      7: { cellWidth: 22, halign: "right", fontStyle: "bold" },
-      8: { cellWidth: 20, halign: "center" },
+      4: { cellWidth: 12, halign: "center" },
+      5: { cellWidth: 16, halign: "center" },
+      8: { cellWidth: 22, halign: "right", fontStyle: "bold" },
+      9: { cellWidth: 20, halign: "center" },
     },
   });
 

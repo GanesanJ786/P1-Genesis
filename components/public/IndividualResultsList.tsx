@@ -39,7 +39,7 @@ function buildShareText(rows: IndividualResultRow[], scopeLabel: string, eventTi
     const meta = [r.event, r.category, r.gender, r.round].filter(Boolean).join(" · ");
     const resultText = displayResult(r);
     const mark = resultText ? ` — ${resultText}` : "";
-    return `${medal}${bib}${r.name} (${r.school || "Unattached"})${mark} [${meta}]`;
+    return `${r.rank}. ${medal}${bib}${r.name} (${r.school || "Unattached"})${mark} [${meta}]`;
   });
   return [`🏆 ${eventTitle} — ${scopeLabel}`, ...lines, `Full results: ${url}`].join("\n");
 }
@@ -257,6 +257,9 @@ export function IndividualResultsList({
                   <span>{r.gender}</span>
                 </p>
                 <div className="flex items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold tabular-nums text-sand">
+                    {r.rank}
+                  </span>
                   {r.bib ? (
                     <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-sand">
                       {r.bib}
