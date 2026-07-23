@@ -1,5 +1,6 @@
-import type { MeetStats, MedalTallyRow } from "@/lib/live";
+import type { MeetStats, MedalTallyRow, IndividualRankingRow } from "@/lib/live";
 import { MedalTally } from "@/components/public/MedalTally";
+import { IndividualRankings } from "@/components/public/IndividualRankings";
 
 const GENDER_COLORS: Record<string, string> = {
   Boys: "bg-sky-400",
@@ -38,11 +39,15 @@ function ShareBar({ pct, className }: { pct: number; className?: string }) {
 export function MeetOverview({
   stats,
   medalRows,
+  individualRows,
   onViewInstitution,
+  onViewAthlete,
 }: {
   stats: MeetStats;
   medalRows: MedalTallyRow[];
+  individualRows: IndividualRankingRow[];
   onViewInstitution?: (school: string) => void;
+  onViewAthlete?: (name: string) => void;
 }) {
   const medalPct = (n: number) =>
     stats.medalTotals.total > 0 ? Math.round((n / stats.medalTotals.total) * 100) : 0;
@@ -134,6 +139,8 @@ export function MeetOverview({
       ) : null}
 
       <MedalTally rows={medalRows} onViewInstitution={onViewInstitution} />
+
+      <IndividualRankings rows={individualRows} onViewAthlete={onViewAthlete} />
     </div>
   );
 }

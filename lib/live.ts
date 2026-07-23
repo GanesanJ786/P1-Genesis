@@ -316,10 +316,12 @@ function isPointsEligible(f: Finisher): boolean {
   return f.rank >= 1 && !!f.school && !isExcludedFromScoring(f);
 }
 
-/** One race's points by school, capped at each school's best TWO placings
- *  in that race — a school's 3rd (or worse) finisher here earns nothing,
- *  so one dominant school can't sweep every point in a single event. */
-function racePointsBySchool(finishers: Finisher[]): Map<string, { display: string; points: number }> {
+/** For each school, the (up to 2) finishers whose placement in this race
+ *  earns points — the top-2-per-school cap, applied once here and shared by
+ *  racePointsBySchool (school total) and computeIndividualRankings (each of
+ *  those finishers' own points), so the cap can never drift between the
+ *  team and individual views. */
+function raceScorers(finishers: Finisher[]): Map<string, { display: string; scorers: Finisher[] }> {
   const bySchool = new Map<string, Finisher[]>();
   for (const f of finishers) {
     if (!isPointsEligible(f)) continue;
@@ -332,13 +334,22 @@ function racePointsBySchool(finishers: Finisher[]): Map<string, { display: strin
     }
     list.push(f);
   }
-  const out = new Map<string, { display: string; points: number }>();
+  const out = new Map<string, { display: string; scorers: Finisher[] }>();
   for (const [key, list] of bySchool) {
     list.sort((a, b) => a.rank - b.rank);
-    const points = list
-      .slice(0, 2)
-      .reduce((sum, f) => sum + (TEAM_POINTS_TABLE[f.rank] ?? 0), 0);
-    out.set(key, { display: list[0].school, points });
+    out.set(key, { display: list[0].school, scorers: list.slice(0, 2) });
+  }
+  return out;
+}
+
+/** One race's points by school, capped at each school's best TWO placings
+ *  in that race — a school's 3rd (or worse) finisher here earns nothing,
+ *  so one dominant school can't sweep every point in a single event. */
+function racePointsBySchool(finishers: Finisher[]): Map<string, { display: string; points: number }> {
+  const out = new Map<string, { display: string; points: number }>();
+  for (const [key, { display, scorers }] of raceScorers(finishers)) {
+    const points = scorers.reduce((sum, f) => sum + (TEAM_POINTS_TABLE[f.rank] ?? 0), 0);
+    out.set(key, { display, points });
   }
   return out;
 }
@@ -412,6 +423,75 @@ export function computeMedalTally(rows: LiveRow[]): MedalTallyRow[] {
       b.bronze - a.bronze ||
       a.school.localeCompare(b.school),
   );
+}
+
+export type IndividualRankingRow = {
+  name: string;
+  school: string;
+  bib?: string;
+  gold: number;
+  silver: number;
+  bronze: number;
+  /** Sum of this athlete's own team-scoring points across every completed
+   *  final — the same per-race points a school's MedalTallyRow.points is
+   *  built from, just attributed to the individual who earned them rather
+   *  than summed into their school's total. */
+  points: number;
+};
+
+/**
+ * Individual athlete leaderboard: each athlete's own points, summed across
+ * every completed final they scored in — reuses the exact same top-2-per-
+ * school-per-race cap as the team Medal Tally (via raceScorers), so an
+ * athlete's total here is always consistent with their contribution to
+ * their school's MedalTallyRow.points. Only athletes who scored at least
+ * one point appear — a large meet has far more non-scoring (4th-or-worse)
+ * finishers than scorers, and a "ranking" of all-zero entries isn't useful.
+ */
+export function computeIndividualRankings(rows: LiveRow[]): IndividualRankingRow[] {
+  const tally = new Map<string, IndividualRankingRow>();
+
+  function getOrCreate(f: Finisher, school: string): IndividualRankingRow {
+    const key = athleteKey(f, school);
+    let entry = tally.get(key);
+    if (!entry) {
+      entry = { name: f.name, school, bib: f.bib, gold: 0, silver: 0, bronze: 0, points: 0 };
+      tally.set(key, entry);
+    }
+    return entry;
+  }
+
+  for (const row of rows) {
+    if (row.status !== "completed" || !isFinalHeat(row.heat_label)) continue;
+    const finishers = parseFinishers(row.results);
+
+    for (const f of finishers) {
+      if (!f.school || !isMedalEligible(f)) continue;
+      const entry = getOrCreate(f, f.school);
+      if (f.rank === 1) entry.gold += 1;
+      else if (f.rank === 2) entry.silver += 1;
+      else entry.bronze += 1;
+    }
+
+    for (const [, { scorers }] of raceScorers(finishers)) {
+      for (const f of scorers) {
+        const pts = TEAM_POINTS_TABLE[f.rank] ?? 0;
+        if (pts <= 0) continue;
+        getOrCreate(f, f.school).points += pts;
+      }
+    }
+  }
+
+  return [...tally.values()]
+    .filter((e) => e.points > 0)
+    .sort(
+      (a, b) =>
+        b.points - a.points ||
+        b.gold - a.gold ||
+        b.silver - a.silver ||
+        b.bronze - a.bronze ||
+        a.name.localeCompare(b.name),
+    );
 }
 
 /** One athlete's performance in one race, flattened out of a LiveRow for the

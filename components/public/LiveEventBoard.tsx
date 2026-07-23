@@ -21,6 +21,7 @@ import { TournamentGallery } from "@/components/public/TournamentGallery";
 import {
   normalizeLiveItem,
   computeMedalTally,
+  computeIndividualRankings,
   computeMeetStats,
   computeIndividualResults,
   scheduleComparator,
@@ -628,6 +629,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   }, [items]);
 
   const medalTally = useMemo(() => computeMedalTally(items), [items]);
+  const individualRankings = useMemo(() => computeIndividualRankings(items), [items]);
   const meetStats = useMemo(
     () => computeMeetStats(items, medalTally),
     [items, medalTally],
@@ -664,6 +666,13 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     setResultsEvent(null);
     setResultsRound("finalists");
     setQuery("");
+  };
+
+  // Individual Results has no per-athlete filter (only institution/category/
+  // event) — the page-level search already matches athlete name, so reuse
+  // that instead of adding a redundant filter control.
+  const handleViewAthlete = (name: string) => {
+    setQuery(name);
   };
 
   // Build the nested Category → Gender → Event → Round programme from the
@@ -904,7 +913,9 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
             <MeetOverview
               stats={meetStats}
               medalRows={medalTally}
+              individualRows={individualRankings}
               onViewInstitution={handleViewInstitution}
+              onViewAthlete={handleViewAthlete}
             />
           ) : activeTab === "results" ? (
             <IndividualResultsList
