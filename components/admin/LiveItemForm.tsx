@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveLiveItem, type ActionResult } from "@/lib/actions/admin";
 import { mediaToText, normalizeMedia } from "@/lib/events";
-import { parseFinishers, type LiveRow } from "@/lib/live";
+import { DQ_REASONS, parseFinishers, type LiveRow } from "@/lib/live";
 import { TextField, TextArea, SelectField, SubmitButton, Label } from "./fields";
 import type { Database } from "@/types/database.types";
 
@@ -42,6 +42,16 @@ export function LiveItemForm({
     null,
   );
   const finishers = parseFinishers(item?.results ?? []);
+  // Purely a UI toggle (show/hide the freetext note) — the row's actual
+  // submitted values stay uncontrolled via defaultValue/defaultChecked+name.
+  const [showNote, setShowNote] = useState<Record<number, boolean>>(() =>
+    Object.fromEntries(
+      [1, 2, 3, 4, 5, 6].map((rank) => [
+        rank,
+        finishers.find((f) => f.rank === rank)?.disqualificationReason === "Other",
+      ]),
+    ),
+  );
 
   return (
     <form action={formAction} className="max-w-3xl space-y-5">
@@ -236,6 +246,40 @@ export function LiveItemForm({
                     <option value="MR">MR</option>
                     <option value="NR">NR</option>
                   </select>
+                  <div className="col-span-full flex flex-wrap items-center gap-2 pl-[2.9rem]">
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-sand">
+                      <input
+                        type="checkbox"
+                        name={`dq_${rank}`}
+                        defaultChecked={f?.disqualified ?? false}
+                        className="h-3.5 w-3.5 rounded border-white/20 bg-ink accent-ember"
+                      />
+                      Disqualified
+                    </label>
+                    <select
+                      name={`dq_reason_${rank}`}
+                      defaultValue={f?.disqualificationReason ?? ""}
+                      onChange={(e) =>
+                        setShowNote((s) => ({ ...s, [rank]: e.target.value === "Other" }))
+                      }
+                      className={`${inputBase} max-w-[12rem]`}
+                    >
+                      <option value="">Reason —</option>
+                      {DQ_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                    {showNote[rank] ? (
+                      <input
+                        name={`dq_note_${rank}`}
+                        defaultValue={f?.disqualificationNote ?? ""}
+                        placeholder="Details for 'Other'…"
+                        className={`${inputBase} min-w-[10rem] flex-1`}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               );
             })}

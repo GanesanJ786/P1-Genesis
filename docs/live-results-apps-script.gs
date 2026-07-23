@@ -69,7 +69,22 @@ const COLS = {
   school: "School / Club",
   result: "Result",
   record: "Record",
+  reason: "Reason",
 };
+
+// Mirrors lib/live.ts's DQ_REASONS — keep both lists in sync. The raw text
+// typed into a category sheet's Reason column is classified against this
+// list in buildPayload(): an exact (case-insensitive) match sets
+// disqualificationReason to that canonical value; anything else (including
+// free text typed past the suggested dropdown) is treated as "Other" with
+// the raw text kept as disqualificationNote.
+const DQ_REASONS = [
+  "Fake/incorrect age",
+  "Drug violation (doping)",
+  "Indiscipline",
+  "False/foul start",
+  "Other",
+];
 
 /* ── Menu ─────────────────────────────────────────────────────────────────── */
 
@@ -91,6 +106,7 @@ function onOpen() {
     .addItem("3. Push category sheets to Results & publish", "pushGroupTabsToResults")
     .addSeparator()
     .addItem("Add heat to an event (spot entries)", "addHeatToEvent")
+    .addItem("Add Reason column to existing sheets", "addReasonColumnToExistingSheets")
     .addItem("Upgrade existing sheets for Time/Started columns", "upgradeExistingCategorySheets")
     .addSeparator()
     .addItem("View \"qualified to Finals\" races", "viewFinalistRaces")
@@ -252,6 +268,13 @@ function buildPayload() {
         result: String(raw(row, "result")).trim(),
         record: String(raw(row, "record")).trim().toUpperCase(),
       };
+      const reasonText = String(raw(row, "reason")).trim();
+      if (reasonText) {
+        const dq = classifyDqReason(reasonText);
+        finisher.disqualified = true;
+        finisher.disqualificationReason = dq.reason;
+        if (dq.note) finisher.disqualificationNote = dq.note;
+      }
       // A "Finalist" row-group (qualified lineup, no result yet) and the
       // Completed row-group that eventually replaces it both share this
       // event_key — without this, buildPayload's full-history rescan would
@@ -279,6 +302,9 @@ function buildPayload() {
       if (f.school) o.school = f.school;
       if (f.result) o.result = f.result;
       if (f.record) o.record = f.record;
+      if (f.disqualified) o.disqualified = f.disqualified;
+      if (f.disqualificationReason) o.disqualificationReason = f.disqualificationReason;
+      if (f.disqualificationNote) o.disqualificationNote = f.disqualificationNote;
       return o;
     });
 
@@ -349,6 +375,20 @@ function addNumber(obj, key, val) {
   if (val === undefined || val === null || val === "") return;
   const n = Number(val);
   if (!isNaN(n)) obj[key] = n;
+}
+// Classifies a Reason cell's raw typed text against DQ_REASONS: an exact
+// (case-insensitive) match against a canonical reason (other than "Other")
+// returns that reason with no note; anything else — including a custom
+// detail typed straight past the suggested dropdown — is "Other" with the
+// raw text kept as the note.
+function classifyDqReason(reasonText) {
+  const canonical = DQ_REASONS.filter(function (r) { return r !== "Other"; });
+  for (var i = 0; i < canonical.length; i++) {
+    if (canonical[i].toLowerCase() === reasonText.toLowerCase()) {
+      return { reason: canonical[i], note: "" };
+    }
+  }
+  return { reason: "Other", note: reasonText };
 }
 function slugify(s) {
   return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

@@ -461,6 +461,9 @@ function finishersFromForm(raw: Record<string, string>): Finisher[] {
     if (!name) continue; // empty rows are dropped
     const bib = (raw[`bib_${i}`] ?? "").trim();
     const record = (raw[`record_${i}`] ?? "").trim();
+    const disqualified = raw[`dq_${i}`] === "on";
+    const disqualificationReason = (raw[`dq_reason_${i}`] ?? "").trim();
+    const disqualificationNote = (raw[`dq_note_${i}`] ?? "").trim();
     out.push({
       rank: i,
       ...(bib ? { bib } : {}),
@@ -468,6 +471,11 @@ function finishersFromForm(raw: Record<string, string>): Finisher[] {
       school: (raw[`school_${i}`] ?? "").trim(),
       result: (raw[`mark_${i}`] ?? "").trim(),
       ...(record ? { record } : {}),
+      ...(disqualified ? { disqualified } : {}),
+      ...(disqualified && disqualificationReason ? { disqualificationReason } : {}),
+      ...(disqualified && disqualificationReason === "Other" && disqualificationNote
+        ? { disqualificationNote }
+        : {}),
     });
   }
   return out;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Building2, Download, ListFilter, Loader2, Share2, Trophy } from "lucide-react";
-import { isFinalHeat, type IndividualResultRow } from "@/lib/live";
+import { dqFullReason, displayResult, isDisqualified, isFinalHeat, type IndividualResultRow } from "@/lib/live";
 
 const PAGE_SIZE = 50;
 
@@ -37,7 +37,8 @@ function buildShareText(rows: IndividualResultRow[], scopeLabel: string, eventTi
     const medal = r.medal ? `${MEDALS[r.medal]} ` : "";
     const bib = r.bib ? `${r.bib} ` : "";
     const meta = [r.event, r.category, r.gender, r.round].filter(Boolean).join(" · ");
-    const mark = r.result ? ` — ${r.result}` : "";
+    const resultText = displayResult(r);
+    const mark = resultText ? ` — ${resultText}` : "";
     return `${medal}${bib}${r.name} (${r.school || "Unattached"})${mark} [${meta}]`;
   });
   return [`🏆 ${eventTitle} — ${scopeLabel}`, ...lines, `Full results: ${url}`].join("\n");
@@ -262,11 +263,27 @@ export function IndividualResultsList({
                     </span>
                   ) : null}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-cream">{r.name}</p>
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-cream">
+                      <span className="truncate">{r.name}</span>
+                      {isDisqualified(r) ? (
+                        <span
+                          className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-400"
+                          title={dqFullReason(r) ?? "Disqualified"}
+                        >
+                          DQ
+                        </span>
+                      ) : null}
+                    </p>
                     <p className="truncate text-xs text-sand/70">{r.school || "Unattached"}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-sm font-bold tabular-nums text-ember">{r.result || "—"}</p>
+                    <p
+                      className={`text-sm font-bold tabular-nums ${
+                        isDisqualified(r) ? "text-rose-400" : "text-ember"
+                      }`}
+                    >
+                      {displayResult(r) || "—"}
+                    </p>
                     {r.medal ? <p className="text-xs">{MEDALS[r.medal]}</p> : null}
                   </div>
                 </div>

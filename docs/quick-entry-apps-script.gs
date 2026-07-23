@@ -382,15 +382,15 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   const finalStartedHeaderRows = []; // header rows needing a Started checkbox (Final blocks only, Track or Field)
 
   function pushBlankRow() {
-    mainRows.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push(["", "", "", "", "", "", "", "", "", "", "", "", ""]);
   }
   function pushTitleRow() {
-    mainRows.push(["Category: " + category, "", "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push(["Category: " + category, "", "", "", "", "", "", "", "", "", "", "", ""]);
     boldRows.push(mainRows.length);
     mergeRows.push(mainRows.length);
   }
   function pushBlockHeaderRow(label) {
-    mainRows.push([label, "", "", "", "", "", "", "", "", "", "", ""]);
+    mainRows.push([label, "", "", "", "", "", "", "", "", "", "", "", ""]);
     boldRows.push(mainRows.length);
     mergeRows.push(mainRows.length);
     return mainRows.length; // 1-based row number, for the Time/Started mirror formulas
@@ -403,8 +403,10 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
     // Pushed — deliberately appended at the very end rather than inserted
     // earlier, so it never shifts any of the many existing column-index
     // references (row[3] Rank, row[7] Started, row[9] Event, etc.) elsewhere
-    // in this file.
-    mainRows.push(["Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points"]);
+    // in this file. Reason (M) is appended after Points for the same
+    // never-shift-earlier-indices reason — raw typed text, no formula, so
+    // it's never protected (same as Bib/Result/Record).
+    mainRows.push(["Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points", "Reason"]);
     boldRows.push(mainRows.length);
   }
   function dataRowFormulas(rowNum, blockStartRow) {
@@ -465,7 +467,7 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
       const blockMirrors = [];
       const blockPoints = [];
       for (var i = 0; i < block.rows; i++) {
-        mainRows.push(["", "", "", "", "", "", "", "", false, eventName, block.label, ""]);
+        mainRows.push(["", "", "", "", "", "", "", "", false, eventName, block.label, "", ""]);
         const rowNum = mainRows.length;
         blockFormulas.push(dataRowFormulas(rowNum, blockStartRow));
         blockMirrors.push(mirrorFormulas(headerRow, isFinalBlock));
@@ -480,7 +482,7 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   });
 
   const totalRows = mainRows.length;
-  sheet.getRange(1, 1, totalRows, 12).setValues(mainRows);
+  sheet.getRange(1, 1, totalRows, 13).setValues(mainRows);
   formulaBlocks.forEach(function (b) { sheet.getRange(b.start, 2, b.count, 3).setFormulas(b.matrix); });
   mirrorBlocks.forEach(function (b) { sheet.getRange(b.start, 7, b.count, 2).setFormulas(b.matrix); });
   pointsBlocks.forEach(function (b) { sheet.getRange(b.start, 12, b.count, 1).setFormulas(b.matrix); });
@@ -493,11 +495,16 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
   // batch form, so mergeRows stays a per-row loop — it's a much smaller
   // count (one per block header, not two-plus like bold/checkboxes).
   if (boldRows.length) {
-    sheet.getRangeList(boldRows.map(function (r) { return "A" + r + ":L" + r; })).setFontWeight("bold");
+    sheet.getRangeList(boldRows.map(function (r) { return "A" + r + ":M" + r; })).setFontWeight("bold");
   }
   mergeRows.forEach(function (r) { sheet.getRange(r, 1, 1, 6).merge(); }); // A:F — leaves G/H free on the header row itself
   if (dataRowRanges.length) {
     sheet.getRangeList(dataRowRanges.map(function (rr) { return "I" + rr.start + ":I" + (rr.start + rr.count - 1); })).insertCheckboxes(); // I Pushed
+    // M Reason — warning-only suggested list (see ROSTER's "guide, don't
+    // block" philosophy elsewhere): an operator can still type a custom
+    // detail straight into the cell past the suggested options.
+    const reasonRule = SpreadsheetApp.newDataValidation().requireValueInList(DQ_REASONS).setAllowInvalid(true).build();
+    sheet.getRangeList(dataRowRanges.map(function (rr) { return "M" + rr.start + ":M" + (rr.start + rr.count - 1); })).setDataValidation(reasonRule);
   }
   if (finalStartedHeaderRows.length) {
     sheet.getRangeList(finalStartedHeaderRows.map(function (r) { return "H" + r; })).insertCheckboxes(); // H Started
@@ -658,7 +665,7 @@ function announceUpcomingBlocks(ss) {
       outRows.push([
         eventKey, eventName, category, parseGenderFromCategory(category), eventName,
         roundLabel, "", "", "Upcoming", scheduledAt, "", "", participants, "", "", "",
-        "", "", "", "", "", "",
+        "", "", "", "", "", "", "",
       ]);
       newCount++;
     }
@@ -838,6 +845,7 @@ function pushGroupTabsToResults() {
         school: String(row[2]).trim(),
         result: result,
         record: String(row[5]).trim().toUpperCase(),
+        reason: String(row[12] || "").trim(), // M — raw typed text; buildPayload() classifies it
       });
       touched.push({ sheet: sheet, row: r + 1 });
       finisherCount++;
@@ -852,7 +860,7 @@ function pushGroupTabsToResults() {
     const c = liveCandidates[key];
     liveRows.push([
       key, c.event, c.category, parseGenderFromCategory(c.category), c.event,
-      c.round, "", "", "Live", toIso(c.scheduledAt), "", "", "", "", "", "", "", "", "", "", "", "",
+      c.round, "", "", "Live", toIso(c.scheduledAt), "", "", "", "", "", "", "", "", "", "", "", "", "",
     ]);
   });
 
@@ -873,8 +881,8 @@ function pushGroupTabsToResults() {
     const c = finalistCandidates[key];
     c.finishers.forEach(function (f, i) {
       finalistRows.push(i === 0
-        ? [key, c.event, c.category, parseGenderFromCategory(c.category), c.event, c.round, "", "", "Finalist", toIso(c.scheduledAt), "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", ""]
-        : ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", ""]
+        ? [key, c.event, c.category, parseGenderFromCategory(c.category), c.event, c.round, "", "", "Finalist", toIso(c.scheduledAt), "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", "", ""]
+        : ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", i + 1, f.bib, f.name, f.school, "", "", ""]
       );
     });
   });
@@ -897,8 +905,8 @@ function pushGroupTabsToResults() {
       // push. If the race was never announced, Participants just stays
       // unset for it — same graceful-degradation as Venue/POC/Notes.
       outRows.push(i === 0
-        ? [g.event_key, g.event, g.category, g.gender, g.discipline, g.round, "", "", "Completed", scheduledAt, "", "", "", "", "", "", f.rank, f.bib, f.name, f.school, f.result, f.record]
-        : ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", f.rank, f.bib, f.name, f.school, f.result, f.record]
+        ? [g.event_key, g.event, g.category, g.gender, g.discipline, g.round, "", "", "Completed", scheduledAt, "", "", "", "", "", "", f.rank, f.bib, f.name, f.school, f.result, f.record, f.reason]
+        : ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", f.rank, f.bib, f.name, f.school, f.result, f.record, f.reason]
       );
     });
   });
@@ -1061,16 +1069,16 @@ function addHeatToEvent() {
   const columnHeaderRow = headerRow + 1;
   const dataStart = headerRow + 2;
 
-  sheet.getRange(headerRow, 1, 1, 12).setValues([[
-    eventName + " — " + roundLabel, "", "", "", "", "", "", "", "", "", "", "",
+  sheet.getRange(headerRow, 1, 1, 13).setValues([[
+    eventName + " — " + roundLabel, "", "", "", "", "", "", "", "", "", "", "", "",
   ]]);
-  sheet.getRange(headerRow, 1, 1, 12).setFontWeight("bold");
+  sheet.getRange(headerRow, 1, 1, 13).setFontWeight("bold");
   sheet.getRange(headerRow, 1, 1, 6).merge(); // A:F — leaves G/H free for Time/Started, same as a generated block
 
-  sheet.getRange(columnHeaderRow, 1, 1, 12).setValues([[
-    "Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points",
+  sheet.getRange(columnHeaderRow, 1, 1, 13).setValues([[
+    "Bib", "Athlete", "School", "Rank", "Result", "Record", "Time", "Started", "Pushed", "", "", "Points", "Reason",
   ]]);
-  sheet.getRange(columnHeaderRow, 1, 1, 12).setFontWeight("bold");
+  sheet.getRange(columnHeaderRow, 1, 1, 13).setFontWeight("bold");
 
   const mainRows = [];
   const formulaRows = [];
@@ -1079,7 +1087,7 @@ function addHeatToEvent() {
   const blockEndRow = dataStart + rowCount - 1;
   for (var i = 0; i < rowCount; i++) {
     const rowNum = dataStart + i;
-    mainRows.push(["", "", "", "", "", "", "", "", false, eventName, roundLabel, ""]);
+    mainRows.push(["", "", "", "", "", "", "", "", false, eventName, roundLabel, "", ""]);
     formulaRows.push([
       '=IFERROR(INDEX(Roster!$' + nameColLetter + ':$' + nameColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
       '=IFERROR(INDEX(Roster!$' + institutionColLetter + ':$' + institutionColLetter + ',MATCH($A' + rowNum + ',Roster!$' + bibColLetter + ':$' + bibColLetter + ',0)),"")',
@@ -1091,12 +1099,15 @@ function addHeatToEvent() {
     ]);
     if (isFinalBlock) pointsRows.push([pointsFormula(rowNum, dataStart, blockEndRow)]);
   }
-  sheet.getRange(dataStart, 1, rowCount, 12).setValues(mainRows);
+  sheet.getRange(dataStart, 1, rowCount, 13).setValues(mainRows);
   sheet.getRange(dataStart, 2, rowCount, 3).setFormulas(formulaRows);
   sheet.getRange(dataStart, 7, rowCount, 2).setFormulas(mirrorRows);
   sheet.getRange(dataStart, 9, rowCount, 1).insertCheckboxes(); // I Pushed
   if (isFinalBlock) sheet.getRange(headerRow, 8, 1, 1).insertCheckboxes(); // H Started (Final blocks only)
   if (isFinalBlock) sheet.getRange(dataStart, 12, rowCount, 1).setFormulas(pointsRows); // L Points (Final blocks only)
+  // M Reason — warning-only suggested list, same as buildCategorySheet().
+  const reasonRule = SpreadsheetApp.newDataValidation().requireValueInList(DQ_REASONS).setAllowInvalid(true).build();
+  sheet.getRange(dataStart, 13, rowCount, 1).setDataValidation(reasonRule);
 
   // Scoped to just the newly added rows — deliberately not touching the
   // sheet's original protections, so there's no overlap to reason about.
@@ -1117,6 +1128,78 @@ function addHeatToEvent() {
   );
 
   if (announcedCount > 0) sendToSite(false);
+}
+
+/* ── Add Reason column to category sheets built before it existed ────────── */
+
+/**
+ * One-time upgrade for category sheets already generated before the Reason
+ * (M) column existed — unlike the Time/Started upgrade below, this is safe
+ * to do IN PLACE: Reason is appended at the very end of the row (never
+ * inserted mid-sheet), so no existing column, formula, merge, or protection
+ * ever shifts. No delete-and-rebuild, no data replay needed — every already-
+ * typed Bib/Result/Record/Points value is untouched.
+ *
+ * A column-header row is identified by "Points" in column L (present on
+ * every block's header row, Track or Field, Final or not) — the same
+ * detection generateCategoryTabs()/pushColumnHeaderRow() rely on implicitly.
+ * Each such row gets a bold "Reason" label in M, and the block's data rows
+ * (every row below it whose hidden Event column, J, is non-blank) get the
+ * same warning-only DQ_REASONS dropdown a freshly generated sheet has.
+ *
+ * Safe to re-run: a sheet whose first column-header row already reads
+ * "Reason" in M is skipped.
+ */
+function addReasonColumnToExistingSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets().filter(isGroupTab);
+  if (sheets.length === 0) {
+    maybeAlert("No category sheets found.");
+    return;
+  }
+
+  const reasonRule = SpreadsheetApp.newDataValidation().requireValueInList(DQ_REASONS).setAllowInvalid(true).build();
+  const updated = [];
+  const skipped = [];
+
+  sheets.forEach(function (sheet) {
+    const values = sheet.getDataRange().getValues();
+
+    var alreadyHasReason = false;
+    for (var r = 0; r < values.length; r++) {
+      if (String(values[r][11]).trim() === "Points") {
+        alreadyHasReason = String(values[r][12] || "").trim() === "Reason";
+        break;
+      }
+    }
+    if (alreadyHasReason) {
+      skipped.push(sheet.getName());
+      return;
+    }
+
+    var blocksTouched = 0;
+    for (var r = 0; r < values.length; r++) {
+      if (String(values[r][11]).trim() !== "Points") continue; // not a column-header row
+      const headerRowNum = r + 1; // 1-based
+      sheet.getRange(headerRowNum, 13).setValue("Reason").setFontWeight("bold");
+
+      var dataEnd = headerRowNum + 1; // first data row of this block
+      while (dataEnd <= values.length && String(values[dataEnd - 1][9] || "").trim()) dataEnd++;
+      const dataStart = headerRowNum + 1;
+      const dataCount = dataEnd - dataStart; // dataEnd is now one past the last data row
+      if (dataCount > 0) {
+        sheet.getRange(dataStart, 13, dataCount, 1).setDataValidation(reasonRule);
+      }
+      blocksTouched++;
+    }
+    if (blocksTouched > 0) updated.push(sheet.getName() + " (" + blocksTouched + " block(s))");
+  });
+
+  var msg = updated.length
+    ? "Added a Reason column to " + updated.length + " sheet(s):\n" + updated.join("\n")
+    : "Nothing to update.";
+  if (skipped.length) msg += "\n\nAlready had a Reason column, skipped: " + skipped.join(", ") + ".";
+  maybeAlert(msg);
 }
 
 /* ── Upgrade existing category sheets to the Time/Started layout ─────────── */
@@ -1291,16 +1374,60 @@ function resultsHeaders() {
     COLS.heat_label, COLS.day, COLS.sort_order, COLS.status, COLS.scheduled_at,
     COLS.venue, COLS.wind, COLS.participants_count, COLS.poc_name, COLS.poc_phone,
     COLS.notes, COLS.rank, COLS.bib, COLS.name, COLS.school, COLS.result, COLS.record,
+    COLS.reason,
   ];
 }
 
 function ensureResultsSheet(ss) {
   var sheet = ss.getSheetByName(SHEET_NAME);
+  const headers = resultsHeaders();
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
-    const headers = resultsHeaders();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // A Results tab that already existed before a new column (e.g. Reason) was
+  // added keeps its original header row untouched by the branch above.
+  // Every finisher/placeholder row this script appends is a FIXED-width
+  // array matching resultsHeaders() exactly, starting at column 1 — so the
+  // header row for columns 1..N must always equal resultsHeaders(), or a
+  // column's data silently lands under the wrong (or no) label.
+  //
+  // Deliberately NOT based on getLastColumn(): a stray formatted/blank
+  // trailing column beyond the real last header inflates that count, which
+  // previously caused a new header to be appended after those phantom
+  // columns — misaligned from where the fixed-width data actually lands.
+  // Instead, scan exactly the first headers.length columns and rewrite from
+  // the first mismatch onward; anything already correct is left untouched.
+  const current = headers.length > 0 ? sheet.getRange(1, 1, 1, headers.length).getValues()[0] : [];
+  var firstMismatch = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (String(current[i] || "").trim() !== headers[i]) {
+      firstMismatch = i;
+      break;
+    }
+  }
+  if (firstMismatch !== -1) {
+    sheet.getRange(1, firstMismatch + 1, 1, headers.length - firstMismatch)
+      .setValues([headers.slice(firstMismatch)])
+      .setFontWeight("bold");
+  }
+
+  // A header matching one of ours but sitting PAST column headers.length is
+  // a leftover duplicate from an earlier miscalculated write (e.g. this
+  // self-heal, before it accounted for phantom trailing columns) —
+  // buildPayload()'s header->column map is last-match-wins, so a stray
+  // duplicate further right silently hijacks every lookup away from the
+  // correct (canonical) column. Clear it so only the canonical one matches.
+  const lastCol = sheet.getLastColumn();
+  if (lastCol > headers.length) {
+    const tail = sheet.getRange(1, headers.length + 1, 1, lastCol - headers.length).getValues()[0];
+    tail.forEach(function (h, idx) {
+      if (headers.indexOf(String(h).trim()) !== -1) {
+        sheet.getRange(1, headers.length + 1 + idx).setValue("");
+      }
+    });
   }
   return sheet;
 }

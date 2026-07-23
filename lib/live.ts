@@ -21,7 +21,23 @@ export type Finisher = {
   result: string;
   /** Record broken by this performance, e.g. "MR" (meet) / "NR" (national). */
   record?: string;
+  /** Structured disqualification — additive on top of the older convention
+   *  of typing "DQ" literally into `result` (still fully supported below,
+   *  for backward compatibility with anything entered before this existed). */
+  disqualified?: boolean;
+  /** One of DQ_REASONS, set whenever `disqualified` is true. */
+  disqualificationReason?: string;
+  /** Freetext elaboration — only meaningful when disqualificationReason === "Other". */
+  disqualificationNote?: string;
 };
+
+export const DQ_REASONS = [
+  "Fake/incorrect age",
+  "Drug violation (doping)",
+  "Indiscipline",
+  "False/foul start",
+  "Other",
+] as const;
 
 /** Public pages show at most the top N finishers per event. */
 export const TOP_FINISHERS = 6;
@@ -151,6 +167,15 @@ export function parseFinishers(raw: Json): Finisher[] {
         typeof e.record === "string" && e.record.trim()
           ? e.record.trim().toUpperCase()
           : undefined,
+      disqualified: typeof e.disqualified === "boolean" ? e.disqualified : undefined,
+      disqualificationReason:
+        typeof e.disqualificationReason === "string" && e.disqualificationReason.trim()
+          ? e.disqualificationReason.trim()
+          : undefined,
+      disqualificationNote:
+        typeof e.disqualificationNote === "string" && e.disqualificationNote.trim()
+          ? e.disqualificationNote.trim()
+          : undefined,
     });
   }
   return out.sort((a, b) => a.rank - b.rank);
@@ -230,11 +255,53 @@ export type MedalTallyRow = {
   points: number;
 };
 
+// Single source of truth for "does this finisher's result count for
+// anything" — either the older convention (DQ/DNF/DNS typed literally into
+// Result) or the newer structured `disqualified` flag. Any Finisher with
+// neither set behaves exactly as it always has (isExcludedFromScoring is
+// false), so this is purely additive.
+export function isExcludedFromScoring(f: Finisher): boolean {
+  return !!f.disqualified || ["DQ", "DNF", "DNS"].includes(f.result);
+}
+
+/** Narrower than isExcludedFromScoring — specifically "was this athlete
+ *  disqualified" (structured flag, or the legacy literal "DQ" result), as
+ *  opposed to a DNF/DNS, which are normal athletic outcomes, not a rule
+ *  violation. Used to gate the "DQ" badge so a DNF/DNS athlete doesn't get
+ *  mislabeled as disqualified. */
+export function isDisqualified(f: Finisher): boolean {
+  return !!f.disqualified || f.result === "DQ";
+}
+
+/** Full reason text for tooltips/PDF detail/share text — undefined when not disqualified. */
+export function dqFullReason(f: Finisher): string | undefined {
+  if (!f.disqualified) return undefined;
+  if (f.disqualificationReason === "Other") return f.disqualificationNote || "Other";
+  return f.disqualificationReason;
+}
+
+/** Short label for space-constrained contexts (the per-race PDF's fixed-width
+ *  Result column) — deliberately never includes the freetext note, which can
+ *  run long; that only ever appears via dqFullReason/displayResult. */
+export function dqShortLabel(f: Finisher): string {
+  if (!f.disqualified) return "";
+  return f.disqualificationReason ? `DQ (${f.disqualificationReason})` : "DQ";
+}
+
+/** What to show in place of a real result everywhere a finisher's `result`
+ *  currently renders — a disqualified finisher's raw `result` (if any) stays
+ *  on the record as-is, this is purely the display layer. */
+export function displayResult(f: Finisher): string {
+  if (!f.disqualified) return f.result;
+  const detail = dqFullReason(f);
+  return detail ? `DQ (${detail})` : "DQ";
+}
+
 /** Shared by computeMedalTally and computeIndividualResults so medal
  *  eligibility never drifts between the two views — a DQ/DNF/DNS result
  *  never counts as a medal even if its rank looks like 1–3. */
 function isMedalEligible(f: Finisher): boolean {
-  return f.rank >= 1 && f.rank <= 3 && !!f.school && !["DQ", "DNF", "DNS"].includes(f.result);
+  return f.rank >= 1 && f.rank <= 3 && !!f.school && !isExcludedFromScoring(f);
 }
 
 // Team-scoring points for a placing: 1st=7, 2nd=5, 3rd=4, 4th=3, 5th=2,
@@ -246,7 +313,7 @@ function isMedalEligible(f: Finisher): boolean {
 const TEAM_POINTS_TABLE: Record<number, number> = { 1: 7, 2: 5, 3: 4, 4: 3, 5: 2, 6: 1 };
 
 function isPointsEligible(f: Finisher): boolean {
-  return f.rank >= 1 && !!f.school && !["DQ", "DNF", "DNS"].includes(f.result);
+  return f.rank >= 1 && !!f.school && !isExcludedFromScoring(f);
 }
 
 /** One race's points by school, capped at each school's best TWO placings
@@ -366,6 +433,9 @@ export type IndividualResultRow = {
   rank: number;
   record?: string;
   medal: "Gold" | "Silver" | "Bronze" | null;
+  disqualified?: boolean;
+  disqualificationReason?: string;
+  disqualificationNote?: string;
 };
 
 /**
@@ -396,6 +466,9 @@ export function computeIndividualResults(rows: LiveRow[]): IndividualResultRow[]
         result: f.result,
         rank: f.rank,
         record: f.record,
+        disqualified: f.disqualified,
+        disqualificationReason: f.disqualificationReason,
+        disqualificationNote: f.disqualificationNote,
         // A Finalist-stage row already has finishers (the qualified lineup)
         // but its rank is just sheet arrival order and its result is blank
         // — status must be "completed", not just "isFinal", or whoever's
@@ -526,10 +599,14 @@ export function buildShareText(row: LiveRow, url: string): string {
   // markers, otherwise whoever's typed in first would read as "gold".
   const isCompleted = row.status === "completed";
   const lines = parseFinishers(row.results).map((f) => {
-    const pos = isCompleted && f.rank <= 3 ? (SHARE_MEDALS[f.rank - 1] ?? `#${f.rank}`) : `#${f.rank}`;
+    const pos =
+      isCompleted && f.rank <= 3 && !isExcludedFromScoring(f)
+        ? (SHARE_MEDALS[f.rank - 1] ?? `#${f.rank}`)
+        : `#${f.rank}`;
     const bib = f.bib ? `${f.bib} ` : "";
     const school = f.school ? ` (${f.school})` : "";
-    const mark = f.result ? ` — ${f.result}` : "";
+    const display = displayResult(f);
+    const mark = display ? ` — ${display}` : "";
     const rec = f.record ? ` [${f.record}]` : "";
     return `${pos} ${bib}${f.name}${school}${mark}${rec}`;
   });

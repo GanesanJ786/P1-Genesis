@@ -1,4 +1,4 @@
-import type { Finisher } from "@/lib/live";
+import { dqFullReason, displayResult, isDisqualified, isExcludedFromScoring, type Finisher } from "@/lib/live";
 
 /** Podium/finisher rows shared by the hero card and the compact round row. */
 
@@ -28,6 +28,7 @@ export function FinisherList({
           (entry.name.toLowerCase().includes(highlight) ||
             entry.school.toLowerCase().includes(highlight) ||
             (entry.bib ?? "").toLowerCase().includes(highlight));
+        const excluded = isExcludedFromScoring(entry);
         return (
           <div
             // rank alone isn't guaranteed unique — tied placings (a dead
@@ -37,22 +38,24 @@ export function FinisherList({
             className={`flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors ${
               isMatch
                 ? "bg-ember/15 ring-1 ring-ember/40"
-                : isFinal && entry.rank === 1
+                : isFinal && entry.rank === 1 && !excluded
                   ? "bg-amber-500/10"
                   : "bg-white/[0.03]"
             }`}
           >
             {/* Rank: medal for a finals podium, otherwise a consistent
                 circular number badge — reads as a clean native list, and
-                the podium tiers (gold/silver/bronze) stay colour-coded. */}
-            {isFinal && entry.rank <= 3 ? (
+                the podium tiers (gold/silver/bronze) stay colour-coded. A
+                disqualified finisher never gets a medal even if their rank
+                looks like a podium finish. */}
+            {isFinal && entry.rank <= 3 && !excluded ? (
               <span className="w-7 shrink-0 text-center text-xl leading-none">
                 {MEDALS[entry.rank - 1]}
               </span>
             ) : (
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
-                  entry.rank === 1
+                  entry.rank === 1 && !excluded
                     ? "bg-ember/20 text-ember"
                     : "bg-white/[0.06] text-sand"
                 }`}
@@ -85,15 +88,27 @@ export function FinisherList({
                     {entry.record}
                   </span>
                 ) : null}
+                {isDisqualified(entry) ? (
+                  <span
+                    className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-400"
+                    title={dqFullReason(entry) ?? "Disqualified"}
+                  >
+                    DQ
+                  </span>
+                ) : null}
               </p>
               {entry.school ? (
                 <p className="truncate text-xs text-sand/80">{entry.school}</p>
               ) : null}
             </div>
 
-            {entry.result ? (
-              <span className="shrink-0 text-sm font-bold tabular-nums text-ember">
-                {entry.result}
+            {displayResult(entry) ? (
+              <span
+                className={`shrink-0 text-sm font-bold tabular-nums ${
+                  excluded ? "text-rose-400" : "text-ember"
+                }`}
+              >
+                {displayResult(entry)}
               </span>
             ) : null}
           </div>

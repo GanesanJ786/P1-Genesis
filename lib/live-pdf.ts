@@ -3,6 +3,8 @@ import {
   formatScheduledTime,
   isFinalHeat,
   scheduleComparator,
+  displayResult,
+  dqShortLabel,
   LIVE_STATUS_LABELS,
   type LiveRow,
   type IndividualResultRow,
@@ -128,13 +130,23 @@ function resultRows(item: LiveRow): string[][] {
     f.bib ?? "",
     f.name,
     f.school ?? "",
-    f.result ?? "",
+    dqShortLabel(f) || f.result || "",
     f.record ?? "",
   ]);
   return rows.length ? rows : [["", "", "No results recorded yet.", "", "", ""]];
 }
 
-function drawTable(autoTable: AutoTable, doc: JsPdf, item: LiveRow, startY: number): void {
+/** A disqualified finisher's freetext "Other" note doesn't fit the fixed-width
+ *  Result column (dqShortLabel omits it) — printed as a footnote instead. */
+function dqFootnotes(item: LiveRow): string[] {
+  return parseFinishers(item.results)
+    .filter((f) => f.disqualified && f.disqualificationReason === "Other" && f.disqualificationNote)
+    .map((f) => `* ${f.name}: ${f.disqualificationNote}`);
+}
+
+/** Draws the results table and any DQ footnotes beneath it; returns the Y
+ *  position after everything drawn, for callers to place content below it. */
+function drawTable(autoTable: AutoTable, doc: JsPdf, item: LiveRow, startY: number): number {
   autoTable(doc, {
     startY,
     head: TABLE_HEAD,
@@ -151,6 +163,20 @@ function drawTable(autoTable: AutoTable, doc: JsPdf, item: LiveRow, startY: numb
       5: { cellWidth: 20, halign: "center" },
     },
   });
+
+  let y = lastY(doc, startY);
+  const footnotes = dqFootnotes(item);
+  if (footnotes.length) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    for (const line of footnotes) {
+      y += 4;
+      doc.text(line, 14, y);
+    }
+    doc.setFont("helvetica", "normal");
+  }
+  return y;
 }
 
 function lastY(doc: JsPdf, fallback: number): number {
@@ -187,12 +213,12 @@ export async function downloadRoundPdf(item: LiveRow, eventTitle: string): Promi
   doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
   doc.text(metaLine(item), 14, bandH + 19);
 
-  drawTable(autoTable, doc, item, bandH + 24);
+  const tableEndY = drawTable(autoTable, doc, item, bandH + 24);
 
   doc.setFontSize(8);
   doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  doc.text(`Generated ${stamp} · gsfteams.com`, 14, Math.min(lastY(doc, bandH + 24) + 10, pageH - 8));
+  doc.text(`Generated ${stamp} · gsfteams.com`, 14, Math.min(tableEndY + 10, pageH - 8));
 
   doc.save(
     `${slugify(eventTitle)}-${slugify(
@@ -246,8 +272,7 @@ export async function downloadAllFinalsPdf(items: LiveRow[], eventTitle: string)
     doc.text(metaLine(item), 14, y);
     y += 2;
 
-    drawTable(autoTable, doc, item, y + 1);
-    y = lastY(doc, y) + 10;
+    y = drawTable(autoTable, doc, item, y + 1) + 10;
   }
 
   // Footer on every page.
@@ -354,7 +379,7 @@ function individualResultRow(r: IndividualResultRow): string[] {
     r.bib ?? "",
     r.name,
     r.school || "",
-    r.result || "",
+    displayResult(r) || "",
     r.medal ? MEDAL_LABEL[r.medal] : "",
   ];
 }
