@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { MeetStats, MedalTallyRow, IndividualRankingRow } from "@/lib/live";
 import { MedalTally } from "@/components/public/MedalTally";
 import { IndividualRankings } from "@/components/public/IndividualRankings";
@@ -8,6 +11,13 @@ const GENDER_COLORS: Record<string, string> = {
   Men: "bg-indigo-400",
   Women: "bg-rose-400",
 };
+
+const STANDINGS_TABS = [
+  { key: "institutions", label: "Institutions" },
+  { key: "medals", label: "Medal Tally" },
+  { key: "individual", label: "Individual Ranking" },
+] as const;
+type StandingsTab = (typeof STANDINGS_TABS)[number]["key"];
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -51,6 +61,8 @@ export function MeetOverview({
 }) {
   const medalPct = (n: number) =>
     stats.medalTotals.total > 0 ? Math.round((n / stats.medalTotals.total) * 100) : 0;
+
+  const [standingsTab, setStandingsTab] = useState<StandingsTab>("medals");
 
   return (
     <div className="space-y-8">
@@ -121,26 +133,61 @@ export function MeetOverview({
         </section>
       ) : null}
 
-      {stats.topInstitutions.length > 0 ? (
-        <section>
-          <p className="eyebrow mb-4">Top Institutions by Participation</p>
-          <div className="space-y-3 rounded-2xl border border-sand/10 bg-ink-soft/40 p-5">
-            {stats.topInstitutions.slice(0, 10).map((s, i) => (
-              <div key={s.school} className="flex items-center gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold text-sand">
-                  {i + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-cream">{s.school}</span>
-                <span className="shrink-0 text-sm font-semibold text-ember">{s.count}</span>
+      <div>
+        <div className="snap-rail -mx-1 mb-5 flex gap-2 overflow-x-auto px-1">
+          {STANDINGS_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setStandingsTab(t.key)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all active:scale-95 ${
+                standingsTab === t.key
+                  ? "bg-ember text-white shadow-sm shadow-ember/30"
+                  : "bg-ink-soft text-sand hover:text-cream"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {standingsTab === "institutions" ? (
+          stats.topInstitutions.length > 0 ? (
+            <section>
+              <p className="eyebrow mb-4">Top Institutions by Participation</p>
+              <div className="space-y-3 rounded-2xl border border-sand/10 bg-ink-soft/40 p-5">
+                {stats.topInstitutions.slice(0, 10).map((s, i) => (
+                  <div key={s.school} className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold text-sand">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-cream">{s.school}</span>
+                    <span className="shrink-0 text-sm font-semibold text-ember">{s.count}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <MedalTally rows={medalRows} onViewInstitution={onViewInstitution} />
-
-      <IndividualRankings rows={individualRows} onViewAthlete={onViewAthlete} />
+            </section>
+          ) : (
+            <p className="rounded-2xl border border-sand/10 bg-ink-soft px-6 py-10 text-center text-sm text-sand">
+              No institutions yet.
+            </p>
+          )
+        ) : standingsTab === "medals" ? (
+          medalRows.length > 0 ? (
+            <MedalTally rows={medalRows} onViewInstitution={onViewInstitution} />
+          ) : (
+            <p className="rounded-2xl border border-sand/10 bg-ink-soft px-6 py-10 text-center text-sm text-sand">
+              No medals awarded yet.
+            </p>
+          )
+        ) : individualRows.length > 0 ? (
+          <IndividualRankings rows={individualRows} onViewAthlete={onViewAthlete} />
+        ) : (
+          <p className="rounded-2xl border border-sand/10 bg-ink-soft px-6 py-10 text-center text-sm text-sand">
+            No scoring results yet.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
