@@ -18,6 +18,7 @@ import {
   type LiveRow,
 } from "@/lib/live";
 import { Countdown } from "@/components/public/Countdown";
+import type { PdfSponsor } from "@/lib/live-pdf";
 
 /** WhatsApp/native-share text for the full schedule, POC included — the same
  *  contact details are already public on the page per event. */
@@ -45,9 +46,11 @@ function buildScheduleShareText(rows: LiveRow[], eventTitle: string, url: string
 export function ScheduleTimeline({
   items,
   eventTitle,
+  sponsors,
 }: {
   items: LiveRow[];
   eventTitle: string;
+  sponsors: PdfSponsor[];
 }) {
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -75,7 +78,7 @@ export function ScheduleTimeline({
     setPdfBusy(true);
     try {
       const { downloadSchedulePdf } = await import("@/lib/live-pdf");
-      await downloadSchedulePdf(schedule, eventTitle);
+      await downloadSchedulePdf(schedule, eventTitle, sponsors);
     } finally {
       setPdfBusy(false);
     }

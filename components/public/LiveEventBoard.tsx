@@ -8,6 +8,7 @@ import {
   X,
   Download,
   Loader2,
+  Share2,
   SlidersHorizontal,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -37,12 +38,14 @@ import {
   type AnnouncementRow,
 } from "@/lib/live";
 import { IndividualResultsList, type RoundFilter } from "@/components/public/IndividualResultsList";
+import type { PdfSponsor } from "@/lib/live-pdf";
 
 type BoardEvent = { id: string; slug: string; title: string; showSchedule: boolean };
 type Props = {
   event: BoardEvent;
   initialItems: LiveRow[];
   initialAnnouncements: AnnouncementRow[];
+  sponsors: PdfSponsor[];
 };
 
 type StatusFilter = "all" | "upcoming" | "live" | "completed" | "finals" | "finalist";
@@ -231,16 +234,34 @@ function matchesQuery(r: LiveRow, q: string): boolean {
   );
 }
 
+/** WhatsApp/native-share text for every Final currently "Finalist" status
+ *  (qualified lineup known, not yet run) — grouped one block per race, same
+ *  convention as ScheduleTimeline's own bulk share text. */
+function buildQualifiedShareText(rows: LiveRow[], eventTitle: string, url: string): string {
+  const qualified = rows.filter((r) => r.status === "finalist" && isFinalHeat(r.heat_label));
+  const lines = qualified.flatMap((r) => {
+    const label = [r.event_name, r.category, r.gender].filter(Boolean).join(" · ");
+    const finishers = parseFinishers(r.results).sort((a, b) => a.rank - b.rank);
+    const athleteLines = finishers.map(
+      (f) => `  ${f.bib ? `${f.bib} ` : ""}${f.name} (${f.school || "Unattached"})`,
+    );
+    return [`🏁 ${label} — Final`, ...athleteLines];
+  });
+  return [`✅ ${eventTitle} — Qualified for Finals`, ...lines, `Live updates: ${url}`].join("\n");
+}
+
 function EventGroupSection({
   group,
   eventTitle,
   defaultOpen,
   statusFilter,
+  sponsors,
 }: {
   group: EventGroup;
   eventTitle: string;
   defaultOpen?: boolean;
   statusFilter: StatusFilter;
+  sponsors: PdfSponsor[];
 }) {
   // Finished events collapse by default; anything live/upcoming stays open.
   const allCompleted = group.rounds.every((r) => r.status === "completed");
@@ -270,7 +291,7 @@ function EventGroupSection({
       </summary>
       <div className="px-4 pb-1.5">
         {group.rounds.map((r) => (
-          <LiveRoundRow key={r.id} item={r} eventTitle={eventTitle} />
+          <LiveRoundRow key={r.id} item={r} eventTitle={eventTitle} sponsors={sponsors} />
         ))}
       </div>
     </details>
@@ -316,21 +337,24 @@ function FilterChips({
   );
 }
 
-type PageTab = "live" | "overview" | "results" | "gallery";
+type PageTab = "live" | "schedule" | "overview" | "results" | "gallery";
 const PAGE_TABS: { key: PageTab; label: string }[] = [
   { key: "live", label: "Live" },
+  { key: "schedule", label: "Schedule" },
   { key: "overview", label: "Overview" },
   { key: "results", label: "Results" },
   { key: "gallery", label: "Gallery" },
 ];
 
-export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Props) {
+export function LiveEventBoard({ event, initialItems, initialAnnouncements, sponsors }: Props) {
   const [items, setItems] = useState<LiveRow[]>(initialItems);
   const [announcements, setAnnouncements] =
     useState<AnnouncementRow[]>(initialAnnouncements);
   // Top-level page section — independent of activeStatus (Finals/Live/
   // Upcoming/Done), which stays scoped to browsing inside the Live tab.
   const [activeTab, setActiveTab] = useState<PageTab>("live");
+  // Schedule is its own tab, but some events opt out entirely (event.showSchedule).
+  const pageTabs = event.showSchedule ? PAGE_TABS : PAGE_TABS.filter((t) => t.key !== "schedule");
   // Results tab's own Institution/Category/Event dropdown filters — kept
   // separate from the Live tab's activeCategory/activeGender/activeDiscipline
   // chips, since the two tabs filter conceptually different things (a
@@ -346,15 +370,39 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [finalsPdfBusy, setFinalsPdfBusy] = useState(false);
+  const [qualifiedPdfBusy, setQualifiedPdfBusy] = useState(false);
 
   const downloadAllFinals = async () => {
     setFinalsPdfBusy(true);
     try {
       const { downloadAllFinalsPdf } = await import("@/lib/live-pdf");
-      await downloadAllFinalsPdf(items, event.title);
+      await downloadAllFinalsPdf(items, event.title, sponsors);
     } finally {
       setFinalsPdfBusy(false);
     }
+  };
+
+  const downloadQualified = async () => {
+    setQualifiedPdfBusy(true);
+    try {
+      const { downloadQualifiedPdf } = await import("@/lib/live-pdf");
+      await downloadQualifiedPdf(items, event.title, sponsors);
+    } finally {
+      setQualifiedPdfBusy(false);
+    }
+  };
+
+  const shareQualified = async () => {
+    const text = buildQualifiedShareText(items, event.title, window.location.href);
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        return; // dismissed — nothing to do
+      }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeGender, setActiveGender] = useState<string | null>(null);
@@ -391,6 +439,14 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
   // races the live update and the value visibly flickers old→new→old.
   const realtimeConnected = useRef(false);
+  // Timestamp of the last confirmed-fresh check-in (a Realtime event applied,
+  // or a successful poll) — NOT the same as realtimeConnected: a "zombie"
+  // WebSocket can freeze without ever firing a new subscribe status, so
+  // realtimeConnected.current stays true forever even though nothing is
+  // actually arriving. The poll loop below uses staleness (no check-in for
+  // too long) as a second, independent signal to force a catch-up poll even
+  // while the channel still claims to be connected.
+  const lastEventAtRef = useRef(0);
   // Bumped on tab focus/visibility regain to force the Realtime effect below
   // to tear down and rebuild the channel — see the effect for why.
   const [reconnectKey, setReconnectKey] = useState(0);
@@ -401,11 +457,15 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
   // carries the primary key), so it binds unfiltered and removes by id — a
   // no-op when the row belonged to another event.
   useEffect(() => {
+    // A fresh channel (mount or reconnect) counts as a legitimate check-in —
+    // resets the idle clock the poll-staleness guard below reads.
+    lastEventAtRef.current = Date.now();
     const supabase = createClient();
     const itemFilter = `event_id=eq.${event.id}`;
     const applyItem = (raw: Record<string, unknown>) => {
       setItems((prev) => upsertById(prev, normalizeLiveItem(raw)));
       setLastUpdated(new Date());
+      lastEventAtRef.current = Date.now();
     };
     const applyAnnouncement = (raw: Record<string, unknown>) => {
       const next = raw as AnnouncementRow;
@@ -419,6 +479,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
         return [next, ...prev];
       });
       setLastUpdated(new Date());
+      lastEventAtRef.current = Date.now();
     };
 
     const channel = supabase
@@ -439,6 +500,8 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setItems((prev) => prev.filter((r) => r.id !== id));
+          setLastUpdated(new Date());
+          lastEventAtRef.current = Date.now();
         },
       )
       .on(
@@ -457,6 +520,8 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+          setLastUpdated(new Date());
+          lastEventAtRef.current = Date.now();
         },
       )
       .subscribe((status) => {
@@ -474,9 +539,9 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
     // way to recover instead of waiting for a manual reload.
   }, [event.id, reconnectKey]);
 
-  /* ── Polling fallback — only runs while Realtime is *not* connected, so it
-        never fights a live update (handles viewers beyond the connection
-        limit or with Realtime blocked). ────────────────────────────────────── */
+  /* ── Polling fallback — skipped while Realtime is both connected AND
+        actively delivering, so it never fights a live update (handles
+        viewers beyond the connection limit or with Realtime blocked). ────── */
   useEffect(() => {
     const poll = async () => {
       try {
@@ -489,12 +554,20 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
           setItems((prev) => mergeFresh(prev, polled.items ?? []));
           setAnnouncements((prev) => mergeAnnouncements(prev, polled.announcements ?? []));
           setLastUpdated(new Date());
+          lastEventAtRef.current = Date.now();
         }
       } catch { /* silent */ }
     };
 
+    // A channel that claims SUBSCRIBED can still be a zombie (frozen without
+    // ever firing a new status) — so "realtime is healthy" alone isn't
+    // trusted forever. If nothing has actually arrived in a while, poll
+    // anyway as a self-healing safety net, independent of reconnectKey ever
+    // firing (which only covers this tab's own focus/visibility changes).
+    const STALE_MS = 20_000;
     const id = setInterval(() => {
-      if (realtimeConnected.current) return; // Realtime healthy → no poll needed
+      const idleFor = Date.now() - lastEventAtRef.current;
+      if (realtimeConnected.current && idleFor < STALE_MS) return;
       poll();
     }, 10_000);
 
@@ -763,15 +836,15 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
         <>
           {/* Top-level sections — search overrides all of them while active,
               since it's a cross-cutting "jump to X" utility, not tab content. */}
-          <div ref={tabBarRef} className="flex gap-2 scroll-mt-4">
-            {PAGE_TABS.map((tab) => (
+          <div ref={tabBarRef} className="snap-rail -mx-1 flex gap-2 overflow-x-auto px-1 scroll-mt-4">
+            {pageTabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => {
                   setActiveTab(tab.key);
                   setQuery("");
                 }}
-                className={`flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-all active:scale-95 ${
+                className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold transition-all active:scale-95 ${
                   activeTab === tab.key
                     ? "bg-ember text-white shadow-sm shadow-ember/30"
                     : "bg-ink-soft text-sand hover:text-cream"
@@ -812,10 +885,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
               </span>
               <Countdown iso={nextUp.scheduled_at!} />
             </div>
-          ) : null}
-
-          {!q && activeTab === "live" && event.showSchedule ? (
-            <ScheduleTimeline items={items} eventTitle={event.title} />
           ) : null}
 
           {/* Sticky controls: search (always) + status (when browsing) */}
@@ -900,6 +969,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                       eventTitle={event.title}
                       defaultOpen
                       highlight={q}
+                      sponsors={sponsors}
                     />
                   ))}
                 </div>
@@ -932,9 +1002,12 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
               onEventChange={setResultsEvent}
               onRoundChange={setResultsRound}
               eventTitle={event.title}
+              sponsors={sponsors}
             />
           ) : activeTab === "gallery" ? (
             <TournamentGallery items={items} />
+          ) : activeTab === "schedule" ? (
+            <ScheduleTimeline items={items} eventTitle={event.title} sponsors={sponsors} />
           ) : (
             /* ── Live tab: day tabs, filters, grouped programme ──────────── */
             <>
@@ -1007,6 +1080,31 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                 </button>
               ) : null}
 
+              {activeStatus === "finalist" && totalEventCount > 0 ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={shareQualified}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white/5 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-sand transition-colors hover:bg-white/10 hover:text-cream sm:w-auto"
+                  >
+                    <Share2 size={14} /> Share qualified list
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadQualified}
+                    disabled={qualifiedPdfBusy}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-ember px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-white transition-colors hover:bg-ember-bright disabled:opacity-60 sm:w-auto"
+                  >
+                    {qualifiedPdfBusy ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    Download qualified list (PDF)
+                  </button>
+                </div>
+              ) : null}
+
               {/* Programme: Category → Gender → Event → Round, each level
                   sorted ascending (age/distance-aware) so the order matches
                   how a spectator naturally scans a printed heat sheet.
@@ -1074,6 +1172,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements }: Pr
                                       eventTitle={event.title}
                                       defaultOpen={activeStatus === "finals" ? true : undefined}
                                       statusFilter={activeStatus}
+                                      sponsors={sponsors}
                                     />
                                   ))}
                                 </div>

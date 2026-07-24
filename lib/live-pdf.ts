@@ -28,6 +28,12 @@ const STRIPE: [number, number, number] = [248, 245, 240];
 
 const TABLE_HEAD = [["#", "Bib", "Name", "School / Club", "Result", "Record"]];
 
+// Vertical space the sponsor footer strip (label + logo row) occupies above
+// the plain-text footer line — every autoTable call must reserve this as its
+// bottom margin, or autoTable's own automatic pagination (which knows
+// nothing about drawSponsorFooter) lets table rows run straight through it.
+const SPONSOR_FOOTER_RESERVED_H = 38;
+
 type JsPdf = import("jspdf").jsPDF;
 type AutoTable = typeof import("jspdf-autotable").default;
 
@@ -93,11 +99,18 @@ async function drawHeaderBand(
     doc.addImage(festLogo, imgFormat(festLogo), chipX + 2, chipY + 2, chip - 4, chip - 4);
   }
 
-  // Right — Genesis emblem (light artwork, reads on the dark band).
-  const genesisLogo = await loadImageDataUrl("/brand/genesis-emblem.png");
+  // Right — full Genesis logo (mark + wordmark), light artwork on the dark
+  // band — the plain emblem alone dropped the "GENESIS SPORTS FOUNDATION"
+  // wordmark, which this asset already carries baked in (same one used
+  // standalone in Footer.tsx, also over a dark background).
+  const genesisLogo = await loadImageDataUrl("/brand/genesis-logo.png");
   if (genesisLogo) {
-    const w = 30;
-    const h = 15;
+    const props = doc.getImageProperties(genesisLogo);
+    const maxW = 24;
+    const maxH = 28;
+    const scale = Math.min(maxW / props.width, maxH / props.height);
+    const w = props.width * scale;
+    const h = props.height * scale;
     doc.addImage(genesisLogo, imgFormat(genesisLogo), pageW - 14 - w, (bandH - h) / 2, w, h);
   }
 
@@ -155,7 +168,7 @@ function drawTable(autoTable: AutoTable, doc: JsPdf, item: LiveRow, startY: numb
     styles: { fontSize: 10, cellPadding: 2.5, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
     headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: STRIPE },
-    margin: { top: 16 },
+    margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
     columnStyles: {
       0: { cellWidth: 12, halign: "center" },
       1: { cellWidth: 16, halign: "center" },
@@ -186,11 +199,125 @@ function lastY(doc: JsPdf, fallback: number): number {
   );
 }
 
+/** A sponsor as needed for the PDF footer — pre-resolved to a real logo URL
+ *  (or null) so this module never has to know about Supabase Storage paths. */
+export type PdfSponsor = {
+  name: string;
+  logoUrl: string | null;
+  websiteUrl: string | null;
+};
+
+const SPONSOR_CHIP_W_MAX = 28;
+const SPONSOR_CHIP_H_MAX = 16;
+const SPONSOR_CHIP_W_MIN = 12;
+const SPONSOR_CHIP_GAP = 6;
+const SPONSOR_CHIP_ASPECT = SPONSOR_CHIP_H_MAX / SPONSOR_CHIP_W_MAX;
+
+type ResolvedSponsor = { sponsor: PdfSponsor; dataUrl: string | null };
+
+/** Fetches every sponsor logo ONCE per document — callers must load this
+ *  before a per-page footer loop and reuse the result, rather than calling
+ *  it once per page (a multi-page booklet would otherwise re-fetch/re-decode
+ *  the same handful of logos once per page for no reason). */
+async function loadSponsorLogos(sponsors: PdfSponsor[]): Promise<ResolvedSponsor[]> {
+  const dataUrls = await Promise.all(
+    sponsors.map((s) => (s.logoUrl ? loadImageDataUrl(s.logoUrl) : null)),
+  );
+  return sponsors.map((sponsor, i) => ({ sponsor, dataUrl: dataUrls[i] }));
+}
+
+/**
+ * One-row "PARTNERS" strip anchored to the bottom of the CURRENT page, above
+ * the existing plain-text footer line (unchanged, still at pageH - 8) — each
+ * major sponsor's logo drawn directly (no background box/border — just the
+ * mark itself), scaled object-contain within its slot (mirrors
+ * EventSponsors.tsx's LogoPlate normalization, since sponsor logos vary
+ * wildly in aspect ratio), or the sponsor's name as plain text if it has no
+ * logo / the logo fails to load, so a broken image never silently drops a
+ * sponsor. Each logo links to the sponsor's site via doc.link(), same as
+ * every logo on the live site being wrapped in a link.
+ *
+ * Purely synchronous (no fetching) — takes already-resolved logos from
+ * loadSponsorLogos() so it's cheap to call once per page.
+ *
+ * Chip size shrinks (down to a readable floor) so every sponsor fits in one
+ * row — a fixed chip size silently truncated the list once there were more
+ * sponsors than fit at full size, dropping whichever tiers came last. Only
+ * a pathologically long sponsor list (more than fits even at the floor size)
+ * truncates, and only then.
+ */
+function drawSponsorFooterOnPage(
+  doc: JsPdf,
+  pageW: number,
+  pageH: number,
+  resolved: ResolvedSponsor[],
+): void {
+  if (resolved.length === 0) return;
+
+  const available = pageW - 28;
+  const fitWidth = (available - (resolved.length - 1) * SPONSOR_CHIP_GAP) / resolved.length;
+  const chipW = Math.min(SPONSOR_CHIP_W_MAX, Math.max(SPONSOR_CHIP_W_MIN, fitWidth));
+  const chipH = chipW * SPONSOR_CHIP_ASPECT;
+
+  const maxChips = Math.max(1, Math.floor((available + SPONSOR_CHIP_GAP) / (chipW + SPONSOR_CHIP_GAP)));
+  const visible = resolved.slice(0, maxChips);
+
+  const ruleY = pageH - 12;
+  doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+  doc.line(14, ruleY, pageW - 14, ruleY);
+
+  // Chip row must clear the rule with a real gap — its bottom edge otherwise
+  // lands exactly on the rule's Y, cutting through the bottom of any logo
+  // tall enough to use the full chip height.
+  const chipY = ruleY - 3 - chipH;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text("PARTNERS", 14, chipY - 3);
+
+  let x = 14;
+  visible.forEach(({ sponsor, dataUrl }) => {
+    if (dataUrl) {
+      const props = doc.getImageProperties(dataUrl);
+      const scale = Math.min(chipW / props.width, chipH / props.height);
+      const w = props.width * scale;
+      const h = props.height * scale;
+      doc.addImage(
+        dataUrl,
+        imgFormat(dataUrl),
+        x + (chipW - w) / 2,
+        chipY + (chipH - h) / 2,
+        w,
+        h,
+      );
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.5);
+      doc.setTextColor(INK[0], INK[1], INK[2]);
+      doc.text(sponsor.name, x + chipW / 2, chipY + chipH / 2 + 1, {
+        align: "center",
+        maxWidth: chipW - 2,
+      });
+    }
+
+    if (sponsor.websiteUrl) {
+      doc.link(x, chipY, chipW, chipH, { url: sponsor.websiteUrl });
+    }
+
+    x += chipW + SPONSOR_CHIP_GAP;
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Single round                                                               */
 /* -------------------------------------------------------------------------- */
 
-export async function downloadRoundPdf(item: LiveRow, eventTitle: string): Promise<void> {
+export async function downloadRoundPdf(
+  item: LiveRow,
+  eventTitle: string,
+  sponsors: PdfSponsor[] = [],
+): Promise<void> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -220,6 +347,8 @@ export async function downloadRoundPdf(item: LiveRow, eventTitle: string): Promi
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
   doc.text(`Generated ${stamp} · gsfteams.com`, 14, Math.min(tableEndY + 10, pageH - 8));
 
+  drawSponsorFooterOnPage(doc, pageW, pageH, await loadSponsorLogos(sponsors));
+
   doc.save(
     `${slugify(eventTitle)}-${slugify(
       [item.event_name, item.category, item.gender, roundName].filter(Boolean).join(" "),
@@ -231,7 +360,11 @@ export async function downloadRoundPdf(item: LiveRow, eventTitle: string): Promi
 /* All completed finals — one booklet                                         */
 /* -------------------------------------------------------------------------- */
 
-export async function downloadAllFinalsPdf(items: LiveRow[], eventTitle: string): Promise<void> {
+export async function downloadAllFinalsPdf(
+  items: LiveRow[],
+  eventTitle: string,
+  sponsors: PdfSponsor[] = [],
+): Promise<void> {
   const finals = items
     .filter((r) => r.status === "completed" && isFinalHeat(r.heat_label))
     .sort(
@@ -278,6 +411,7 @@ export async function downloadAllFinalsPdf(items: LiveRow[], eventTitle: string)
   // Footer on every page.
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const resolvedSponsors = await loadSponsorLogos(sponsors);
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -286,9 +420,82 @@ export async function downloadAllFinalsPdf(items: LiveRow[], eventTitle: string)
     doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
       align: "right",
     });
+    drawSponsorFooterOnPage(doc, pageW, pageH, resolvedSponsors);
   }
 
   doc.save(`${slugify(eventTitle)}-all-finals.pdf`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Qualified lineups — Finals whose lineup is known but haven't run yet       */
+/* -------------------------------------------------------------------------- */
+
+/** Every Final currently in "Finalist" status (qualified lineup announced,
+ *  not yet run) — same table/footer machinery as the all-finals booklet, but
+ *  Result/Record columns are naturally blank since these races haven't
+ *  happened yet; this is a "who's through" sheet, not a results sheet. */
+export async function downloadQualifiedPdf(
+  items: LiveRow[],
+  eventTitle: string,
+  sponsors: PdfSponsor[] = [],
+): Promise<void> {
+  const qualified = items
+    .filter((r) => r.status === "finalist" && isFinalHeat(r.heat_label))
+    .sort(
+      (a, b) =>
+        a.day - b.day ||
+        a.sort_order - b.sort_order ||
+        a.event_name.localeCompare(b.event_name),
+    );
+  if (qualified.length === 0) return;
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  const bandH = await drawHeaderBand(doc, pageW, eventTitle, "QUALIFIED FOR FINALS");
+
+  let y = bandH + 12;
+  for (const item of qualified) {
+    if (y > pageH - 45) {
+      doc.addPage();
+      y = 18;
+    }
+    const heading = `${[item.event_name, item.category, item.gender]
+      .filter(Boolean)
+      .join(" · ")} — ${item.heat_label || "Final"}`;
+    doc.setTextColor(INK[0], INK[1], INK[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(heading, 14, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(metaLine(item), 14, y);
+    y += 2;
+
+    y = drawTable(autoTable, doc, item, y + 1) + 10;
+  }
+
+  const pages = doc.getNumberOfPages();
+  const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const resolvedSponsors = await loadSponsorLogos(sponsors);
+  for (let i = 1; i <= pages; i += 1) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(`${eventTitle} · Qualified · ${stamp}`, 14, pageH - 8);
+    doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
+      align: "right",
+    });
+    drawSponsorFooterOnPage(doc, pageW, pageH, resolvedSponsors);
+  }
+
+  doc.save(`${slugify(eventTitle)}-qualified-finals.pdf`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -312,7 +519,11 @@ function scheduleRow(item: LiveRow): string[] {
 
 /** The full event timetable — usable and shareable before the meet starts, not
  *  just a "what's next" list, so it deliberately includes every status. */
-export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string): Promise<void> {
+export async function downloadSchedulePdf(
+  items: LiveRow[],
+  eventTitle: string,
+  sponsors: PdfSponsor[] = [],
+): Promise<void> {
   const schedule = [...items].sort(scheduleComparator);
   if (schedule.length === 0) return;
 
@@ -333,7 +544,7 @@ export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string):
     styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
     headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: STRIPE },
-    margin: { top: 16 },
+    margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
     columnStyles: {
       0: { cellWidth: 16, halign: "center" },
       3: { cellWidth: 16, halign: "center" },
@@ -343,6 +554,7 @@ export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string):
 
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const resolvedSponsors = await loadSponsorLogos(sponsors);
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -351,6 +563,7 @@ export async function downloadSchedulePdf(items: LiveRow[], eventTitle: string):
     doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
       align: "right",
     });
+    drawSponsorFooterOnPage(doc, pageW, pageH, resolvedSponsors);
   }
 
   doc.save(`${slugify(eventTitle)}-schedule.pdf`);
@@ -392,6 +605,7 @@ export async function downloadIndividualResultsPdf(
   rows: IndividualResultRow[],
   eventTitle: string,
   scopeLabel: string,
+  sponsors: PdfSponsor[] = [],
 ): Promise<void> {
   if (rows.length === 0) return;
 
@@ -412,7 +626,7 @@ export async function downloadIndividualResultsPdf(
     styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
     headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: STRIPE },
-    margin: { top: 16 },
+    margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
     columnStyles: {
       4: { cellWidth: 12, halign: "center" },
       5: { cellWidth: 16, halign: "center" },
@@ -423,6 +637,7 @@ export async function downloadIndividualResultsPdf(
 
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const resolvedSponsors = await loadSponsorLogos(sponsors);
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -431,6 +646,7 @@ export async function downloadIndividualResultsPdf(
     doc.text(`Page ${i} of ${pages} · gsfteams.com`, pageW - 14, pageH - 8, {
       align: "right",
     });
+    drawSponsorFooterOnPage(doc, pageW, pageH, resolvedSponsors);
   }
 
   doc.save(`${slugify(eventTitle)}-${slugify(scopeLabel)}.pdf`);

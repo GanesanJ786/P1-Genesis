@@ -5,6 +5,7 @@ import { Container, Section } from "@/components/ui/Section";
 import { LiveEventBoard } from "@/components/public/LiveEventBoard";
 import { EventSponsors } from "@/components/public/EventSponsors";
 import { JsonLd } from "@/components/ui/JsonLd";
+import type { PdfSponsor } from "@/lib/live-pdf";
 import {
   getLiveTrackedEvents,
   getLiveEventBySlug,
@@ -64,6 +65,14 @@ export default async function LiveEventPage({
   ]);
 
   const titleSponsor = sponsors.find((s) => s.tier === "title");
+  // "Major" sponsors get mini logos in every downloadable results/schedule
+  // PDF's footer — a wider net than the site's own hero/feature grouping
+  // (EventSponsors.tsx), since print reach matters for Silver/Medical/Sound
+  // too.
+  const MAJOR_SPONSOR_TIERS = ["title", "platinum", "gold", "silver", "medical", "sound"];
+  const pdfSponsors: PdfSponsor[] = sponsors
+    .filter((s) => MAJOR_SPONSOR_TIERS.includes(s.tier))
+    .map((s) => ({ name: s.name, logoUrl: mediaUrl(s.logo_path), websiteUrl: s.website_url }));
   const img = mediaUrl(event.cover_image);
   const pageUrl = `${SITE.url}/live/${event.slug}`;
   const eventSchema = {
@@ -142,6 +151,7 @@ export default async function LiveEventPage({
             }}
             initialItems={items}
             initialAnnouncements={announcements}
+            sponsors={pdfSponsors}
           />
 
           {sponsors.length > 0 ? (

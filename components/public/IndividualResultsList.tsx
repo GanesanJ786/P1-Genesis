@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Building2, Download, ListFilter, Loader2, Share2, Trophy } from "lucide-react";
 import { dqFullReason, displayResult, isDisqualified, isFinalHeat, type IndividualResultRow } from "@/lib/live";
+import type { PdfSponsor } from "@/lib/live-pdf";
 
 const PAGE_SIZE = 50;
 
@@ -102,6 +103,7 @@ export function IndividualResultsList({
   onEventChange,
   onRoundChange,
   eventTitle,
+  sponsors,
 }: {
   rows: IndividualResultRow[];
   institutions: string[];
@@ -116,6 +118,7 @@ export function IndividualResultsList({
   onEventChange: (v: string | null) => void;
   onRoundChange: (v: RoundFilter) => void;
   eventTitle: string;
+  sponsors: PdfSponsor[];
 }) {
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -167,7 +170,7 @@ export function IndividualResultsList({
     setPdfBusy(true);
     try {
       const { downloadIndividualResultsPdf } = await import("@/lib/live-pdf");
-      await downloadIndividualResultsPdf(filtered, eventTitle, scopeLabel);
+      await downloadIndividualResultsPdf(filtered, eventTitle, scopeLabel, sponsors);
     } finally {
       setPdfBusy(false);
     }

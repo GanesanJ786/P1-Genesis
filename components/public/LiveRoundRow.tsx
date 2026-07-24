@@ -25,6 +25,7 @@ import { FinisherList } from "@/components/public/FinisherList";
 import { Countdown } from "@/components/public/Countdown";
 import { ShareResultButton } from "@/components/public/ShareResultButton";
 import { MediaGallery } from "@/components/public/MediaGallery";
+import type { PdfSponsor } from "@/lib/live-pdf";
 
 const PODIUM = 3;
 
@@ -39,11 +40,13 @@ export function LiveRoundRow({
   eventTitle,
   defaultOpen = false,
   highlight,
+  sponsors,
 }: {
   item: LiveRow;
   eventTitle: string;
   defaultOpen?: boolean;
   highlight?: string;
+  sponsors: PdfSponsor[];
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -55,7 +58,7 @@ export function LiveRoundRow({
     setPdfBusy(true);
     try {
       const { downloadRoundPdf } = await import("@/lib/live-pdf");
-      await downloadRoundPdf(item, eventTitle);
+      await downloadRoundPdf(item, eventTitle, sponsors);
     } finally {
       setPdfBusy(false);
     }
