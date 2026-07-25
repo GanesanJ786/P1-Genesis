@@ -40,6 +40,7 @@ export type Slide = {
   sort_order: number;
   is_active: boolean;
 };
+export type TeamMemberType = "leadership" | "coach";
 export type TeamMember = {
   id: string;
   name: string;
@@ -48,6 +49,7 @@ export type TeamMember = {
   photo_path: string | null;
   sort_order: number;
   is_active: boolean;
+  member_type: TeamMemberType;
 };
 
 /** Expected-reach metrics ("By the numbers"). */
@@ -109,6 +111,7 @@ export const SEED_TEAM: TeamMember[] = [
     photo_path: "/team/mohanraj.webp",
     sort_order: 1,
     is_active: true,
+    member_type: "leadership",
   },
   {
     id: "t2",
@@ -118,6 +121,7 @@ export const SEED_TEAM: TeamMember[] = [
     photo_path: "/team/sivakumar.webp",
     sort_order: 2,
     is_active: true,
+    member_type: "leadership",
   },
   {
     id: "t3",
@@ -127,6 +131,7 @@ export const SEED_TEAM: TeamMember[] = [
     photo_path: "/team/vairavanathan.webp",
     sort_order: 3,
     is_active: true,
+    member_type: "leadership",
   },
   {
     id: "t4",
@@ -136,6 +141,7 @@ export const SEED_TEAM: TeamMember[] = [
     photo_path: "/team/madhu-shankar.webp",
     sort_order: 4,
     is_active: true,
+    member_type: "leadership",
   },
   {
     id: "t5",
@@ -145,6 +151,7 @@ export const SEED_TEAM: TeamMember[] = [
     photo_path: "/team/maria-catherine.webp",
     sort_order: 5,
     is_active: true,
+    member_type: "leadership",
   },
 ];
 

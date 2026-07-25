@@ -100,6 +100,7 @@ export const teamMemberSchema = z.object({
   photo_path: z.string().optional().or(z.literal("")),
   sort_order: z.coerce.number().int().default(0),
   is_active: z.boolean().default(true),
+  member_type: z.enum(["leadership", "coach"]).default("leadership"),
 });
 export type TeamMemberInput = z.infer<typeof teamMemberSchema>;
 

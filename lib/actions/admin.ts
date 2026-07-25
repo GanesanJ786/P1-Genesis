@@ -326,6 +326,7 @@ export async function saveTeamMember(
     photo_path: d.photo_path || null,
     sort_order: d.sort_order,
     is_active: d.is_active,
+    member_type: d.member_type,
   };
   const { error } = id
     ? await supabase.from("team_members").update(payload).eq("id", id)

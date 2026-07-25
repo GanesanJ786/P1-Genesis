@@ -14,7 +14,7 @@ export default async function AdminTeamPage() {
     <div className="p-8">
       <AdminHeader
         title="Team"
-        subtitle="Manage leadership members shown on the Team page."
+        subtitle="Manage leadership members and coaches shown on the Team page."
         action={{ href: "/admin/team/new", label: "New member" }}
       />
 
@@ -26,6 +26,7 @@ export default async function AdminTeamPage() {
             <thead className="bg-white/5 text-xs uppercase tracking-widest text-sand">
               <tr>
                 <th className="px-5 py-3 font-medium">Name</th>
+                <th className="px-5 py-3 font-medium">Type</th>
                 <th className="px-5 py-3 font-medium">Role</th>
                 <th className="px-5 py-3 font-medium">Active</th>
                 <th className="px-5 py-3 font-medium text-right">Actions</th>
@@ -35,6 +36,9 @@ export default async function AdminTeamPage() {
               {team.map((m) => (
                 <tr key={m.id} className="border-t border-white/5">
                   <td className="px-5 py-4 font-medium text-cream">{m.name}</td>
+                  <td className="px-5 py-4 text-sand">
+                    {m.member_type === "coach" ? "Coach" : "Leadership"}
+                  </td>
                   <td className="px-5 py-4 text-sand">{m.role_title || "—"}</td>
                   <td className="px-5 py-4 text-sand">{m.is_active ? "Yes" : "No"}</td>
                   <td className="px-5 py-4">

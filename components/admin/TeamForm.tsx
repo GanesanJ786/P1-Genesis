@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { saveTeamMember, type ActionResult } from "@/lib/actions/admin";
 import { ImageUploader } from "./ImageUploader";
-import { TextField, TextArea, CheckboxField, SubmitButton } from "./fields";
+import { TextField, TextArea, SelectField, CheckboxField, SubmitButton } from "./fields";
 import type { Database } from "@/types/database.types";
 
 type TeamRow = Database["public"]["Tables"]["team_members"]["Row"];
@@ -18,6 +18,15 @@ export function TeamForm({ member }: { member?: TeamRow }) {
   return (
     <form action={formAction} className="max-w-2xl space-y-5">
       <TextField label="Name" name="name" required defaultValue={member?.name} />
+      <SelectField
+        label="Type"
+        name="member_type"
+        defaultValue={member?.member_type ?? "leadership"}
+        options={[
+          { value: "leadership", label: "Leadership" },
+          { value: "coach", label: "Coach" },
+        ]}
+      />
       <TextField label="Role / title" name="role_title" defaultValue={member?.role_title ?? ""} />
       <TextArea label="Bio" name="bio" defaultValue={member?.bio ?? ""} />
       <div>

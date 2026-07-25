@@ -189,11 +189,11 @@ export default async function HomePage() {
         </Container>
       </FeatureBanner>
 
-      {/* Leadership teaser */}
+      {/* Leadership teaser — coaches are shown on the full /team page only */}
       <Section>
         <Container>
           <SectionHeading eyebrow="Leadership" title="The People Behind It" />
-          <TeamGrid members={team} />
+          <TeamGrid members={team.filter((m) => m.member_type !== "coach")} />
           <div className="mt-10">
             <ButtonLink href="/team" variant="ghost">
               More About the Team <ArrowRight size={16} />

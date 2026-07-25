@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Container, Section } from "@/components/ui/Section";
 import { LiveEventBoard } from "@/components/public/LiveEventBoard";
 import { EventSponsors } from "@/components/public/EventSponsors";
+import { TrackFestMascot } from "@/components/public/TrackFestMascot";
 import { JsonLd } from "@/components/ui/JsonLd";
 import type { PdfSponsor } from "@/lib/live-pdf";
 import {
@@ -104,6 +105,7 @@ export default async function LiveEventPage({
   return (
     <>
       <JsonLd data={eventSchema} />
+      <TrackFestMascot />
       {/* Breadcrumb */}
       <div className="border-b border-sand/10 bg-ink pt-20 sm:pt-24">
         <Container className="pb-3">

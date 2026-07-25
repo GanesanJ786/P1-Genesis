@@ -16,6 +16,7 @@ export type SponsorTier =
   | "sound"
   | "partner"
   | "supporter";
+export type TeamMemberType = "leadership" | "coach";
 export type BlogCategory = "news" | "results" | "stories" | "training";
 export type BlogStatus = "draft" | "published";
 export type ImageOrientation = "landscape" | "portrait";
@@ -156,6 +157,7 @@ export interface Database {
           photo_path: string | null;
           sort_order: number;
           is_active: boolean;
+          member_type: TeamMemberType;
         };
         Insert: {
           id?: string;
@@ -165,6 +167,7 @@ export interface Database {
           photo_path?: string | null;
           sort_order?: number;
           is_active?: boolean;
+          member_type?: TeamMemberType;
         };
         Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
         Relationships: [];

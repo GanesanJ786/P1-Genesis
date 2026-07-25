@@ -9,9 +9,9 @@ import { SITE } from "@/lib/constants";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Leadership Team",
+  title: "Leadership & Coaches",
   description:
-    "Meet the leadership team behind Genesis Track Fest 2026 and Genesis Sports Foundation.",
+    "Meet the leadership team and coaches behind Genesis Track Fest 2026 and Genesis Sports Foundation.",
   alternates: { canonical: `${SITE.url}/team` },
 };
 
@@ -20,9 +20,9 @@ export default async function TeamPage() {
   return (
     <>
       <PageHero
-        eyebrow="Leadership"
+        eyebrow="Our People"
         title="The Team"
-        description="The people steering Genesis Sports Foundation and the championship."
+        description="The leadership and coaching staff steering Genesis Sports Foundation and the championship."
       />
       <Section>
         <Container>
