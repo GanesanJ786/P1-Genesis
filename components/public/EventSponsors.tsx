@@ -22,7 +22,7 @@ const TIERS: { key: SponsorTier; label: string; level: Level }[] = [
   { key: "silver", label: "Silver Sponsors", level: "standard" },
   { key: "bronze", label: "Bronze Sponsors", level: "standard" },
   { key: "medical", label: "Medical Partner", level: "standard" },
-  { key: "sound", label: "FM Partner", level: "standard" },
+  { key: "sound", label: "Radio Partner", level: "standard" },
   { key: "partner", label: "Event Partners", level: "standard" },
   { key: "supporter", label: "Event Supporters", level: "standard" },
 ];

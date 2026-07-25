@@ -39,7 +39,7 @@ export function SponsorForm({
           { value: "silver", label: "Silver" },
           { value: "bronze", label: "Bronze" },
           { value: "medical", label: "Medical Partner" },
-          { value: "sound", label: "FM Partner" },
+          { value: "sound", label: "Radio Partner" },
           { value: "partner", label: "Event Partner" },
           { value: "supporter", label: "Event Supporter" },
         ]}
