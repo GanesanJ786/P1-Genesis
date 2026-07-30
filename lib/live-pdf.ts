@@ -37,6 +37,18 @@ const SPONSOR_FOOTER_RESERVED_H = 38;
 type JsPdf = import("jspdf").jsPDF;
 type AutoTable = typeof import("jspdf-autotable").default;
 
+/** Hands control back to the browser for one tick. jsPDF/autoTable draw
+ *  everything synchronously, so without this, a caller's "generating..."
+ *  spinner (set right before calling one of the download functions below)
+ *  can lose its only chance to actually paint before the heavy synchronous
+ *  work starts — especially now that logo fetches are cached (no more real
+ *  network waits in between to give the browser a natural opening). Also
+ *  used between chunks of work in long loops so the page keeps responding to
+ *  scrolling/taps during a big multi-page generation, not just at the start. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** jsPDF image format from a data-URL mime type (PNG / JPEG / WEBP). */
 function imgFormat(dataUrl: string): "PNG" | "JPEG" | "WEBP" {
   const m = dataUrl.match(/^data:image\/(png|jpe?g|webp)/i);
@@ -54,27 +66,47 @@ function sniffMime(base64: string): string {
   return "image/png";
 }
 
-async function loadImageDataUrl(src: string): Promise<string | null> {
-  try {
-    const res = await fetch(src);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    const dataUrl = await new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-    if (!dataUrl) return null;
-    // Rebuild the mime from the actual bytes so a mislabelled file (e.g. a JPEG
-    // saved as .png) still decodes correctly in jsPDF.
-    const comma = dataUrl.indexOf(",");
-    if (comma < 0) return dataUrl;
-    const payload = dataUrl.slice(comma + 1);
-    return `data:${sniffMime(payload)};base64,${payload}`;
-  } catch {
-    return null;
-  }
+// Every download re-fetching + re-decoding the same brand/sponsor logos was
+// pure wasted latency — these images don't change between one PDF click and
+// the next in the same page session, so cache the resolved data URL (or the
+// in-flight promise, so two near-simultaneous downloads share one fetch
+// instead of racing two) keyed by source URL.
+const imageDataUrlCache = new Map<string, Promise<string | null>>();
+
+function loadImageDataUrl(src: string): Promise<string | null> {
+  const cached = imageDataUrlCache.get(src);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const dataUrl = await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+      if (!dataUrl) return null;
+      // Rebuild the mime from the actual bytes so a mislabelled file (e.g. a
+      // JPEG saved as .png) still decodes correctly in jsPDF.
+      const comma = dataUrl.indexOf(",");
+      if (comma < 0) return dataUrl;
+      const payload = dataUrl.slice(comma + 1);
+      return `data:${sniffMime(payload)};base64,${payload}`;
+    } catch {
+      return null;
+    }
+  })();
+
+  imageDataUrlCache.set(src, promise);
+  // A failed load shouldn't be cached forever (e.g. a transient network blip)
+  // — let a later download retry it instead of permanently drawing blank.
+  promise.then((result) => {
+    if (result === null) imageDataUrlCache.delete(src);
+  });
+  return promise;
 }
 
 /** Dark header band with both logos + centred title. Returns its height (mm). */
@@ -88,8 +120,14 @@ async function drawHeaderBand(
   doc.setFillColor(INK[0], INK[1], INK[2]);
   doc.rect(0, 0, pageW, bandH, "F");
 
+  // Both logos are independent fetches — load them in parallel rather than
+  // waiting for the Track Fest logo before even starting the Genesis one.
+  const [festLogo, genesisLogo] = await Promise.all([
+    loadImageDataUrl("/brand/coimbatore-track-fest-logo.png"),
+    loadImageDataUrl("/brand/genesis-logo.png"),
+  ]);
+
   // Left — Coimbatore Track Fest logo on a white chip.
-  const festLogo = await loadImageDataUrl("/brand/coimbatore-track-fest-logo.png");
   if (festLogo) {
     const chipX = 8;
     const chipY = 4;
@@ -103,7 +141,6 @@ async function drawHeaderBand(
   // band — the plain emblem alone dropped the "GENESIS SPORTS FOUNDATION"
   // wordmark, which this asset already carries baked in (same one used
   // standalone in Footer.tsx, also over a dark background).
-  const genesisLogo = await loadImageDataUrl("/brand/genesis-logo.png");
   if (genesisLogo) {
     const props = doc.getImageProperties(genesisLogo);
     const maxW = 24;
@@ -318,6 +355,7 @@ export async function downloadRoundPdf(
   eventTitle: string,
   sponsors: PdfSponsor[] = [],
 ): Promise<void> {
+  await yieldToMain();
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -325,6 +363,11 @@ export async function downloadRoundPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
+  // Kick off the sponsor-logo fetch now, in parallel with the header band's
+  // own logo fetches — it's only actually needed at the very end, so it can
+  // fully overlap with everything drawn in between instead of adding its own
+  // sequential wait on top.
+  const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, "OFFICIAL RESULTS");
 
   const roundName = item.heat_label || "Final";
@@ -347,7 +390,7 @@ export async function downloadRoundPdf(
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
   doc.text(`Generated ${stamp} · gsfteams.com`, 14, Math.min(tableEndY + 10, pageH - 8));
 
-  drawSponsorFooterOnPage(doc, pageW, pageH, await loadSponsorLogos(sponsors));
+  drawSponsorFooterOnPage(doc, pageW, pageH, await sponsorsPromise);
 
   doc.save(
     `${slugify(eventTitle)}-${slugify(
@@ -375,6 +418,7 @@ export async function downloadAllFinalsPdf(
     );
   if (finals.length === 0) return;
 
+  await yieldToMain();
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -382,10 +426,15 @@ export async function downloadAllFinalsPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
+  const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, "OFFICIAL RESULTS — FINALS");
 
   let y = bandH + 12;
   for (const item of finals) {
+    // A big booklet (dozens of finals) draws its tables in one uninterrupted
+    // synchronous burst otherwise — yielding per race keeps the page able to
+    // scroll/respond while it's still generating.
+    await yieldToMain();
     // Keep a section heading from being orphaned at the foot of a page.
     if (y > pageH - 45) {
       doc.addPage();
@@ -411,8 +460,9 @@ export async function downloadAllFinalsPdf(
   // Footer on every page.
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  const resolvedSponsors = await loadSponsorLogos(sponsors);
+  const resolvedSponsors = await sponsorsPromise;
   for (let i = 1; i <= pages; i += 1) {
+    await yieldToMain();
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
@@ -449,6 +499,7 @@ export async function downloadQualifiedPdf(
     );
   if (qualified.length === 0) return;
 
+  await yieldToMain();
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -456,10 +507,12 @@ export async function downloadQualifiedPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
+  const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, "QUALIFIED FOR FINALS");
 
   let y = bandH + 12;
   for (const item of qualified) {
+    await yieldToMain();
     if (y > pageH - 45) {
       doc.addPage();
       y = 18;
@@ -483,8 +536,9 @@ export async function downloadQualifiedPdf(
 
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  const resolvedSponsors = await loadSponsorLogos(sponsors);
+  const resolvedSponsors = await sponsorsPromise;
   for (let i = 1; i <= pages; i += 1) {
+    await yieldToMain();
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
@@ -527,6 +581,7 @@ export async function downloadSchedulePdf(
   const schedule = [...items].sort(scheduleComparator);
   if (schedule.length === 0) return;
 
+  await yieldToMain();
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -534,8 +589,13 @@ export async function downloadSchedulePdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
+  const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, "SCHEDULE");
 
+  // autoTable draws every row of a potentially large schedule in one
+  // uninterrupted synchronous pass — one last yield right before it gives the
+  // browser a final chance to paint (e.g. the busy spinner) before that block.
+  await yieldToMain();
   autoTable(doc, {
     startY: bandH + 10,
     head: SCHEDULE_TABLE_HEAD,
@@ -554,8 +614,9 @@ export async function downloadSchedulePdf(
 
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  const resolvedSponsors = await loadSponsorLogos(sponsors);
+  const resolvedSponsors = await sponsorsPromise;
   for (let i = 1; i <= pages; i += 1) {
+    await yieldToMain();
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
@@ -609,6 +670,7 @@ export async function downloadIndividualResultsPdf(
 ): Promise<void> {
   if (rows.length === 0) return;
 
+  await yieldToMain();
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -616,8 +678,13 @@ export async function downloadIndividualResultsPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
+  const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, scopeLabel.toUpperCase());
 
+  // This is the PDF most likely to be "large data" (an entire meet's worth of
+  // individual results) — one last yield right before autoTable's single
+  // uninterrupted synchronous pass over every row.
+  await yieldToMain();
   autoTable(doc, {
     startY: bandH + 8,
     head: INDIVIDUAL_RESULTS_HEAD,
@@ -637,8 +704,9 @@ export async function downloadIndividualResultsPdf(
 
   const pages = doc.getNumberOfPages();
   const stamp = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-  const resolvedSponsors = await loadSponsorLogos(sponsors);
+  const resolvedSponsors = await sponsorsPromise;
   for (let i = 1; i <= pages; i += 1) {
+    await yieldToMain();
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);

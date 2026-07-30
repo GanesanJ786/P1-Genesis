@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Megaphone, Pin } from "lucide-react";
-import { ANNOUNCEMENT_TYPES, relativeTime, type AnnouncementRow } from "@/lib/live";
+import { ANNOUNCEMENT_TYPES, type AnnouncementRow } from "@/lib/live";
 
 const VISIBLE_DEFAULT = 3;
 
@@ -44,13 +44,9 @@ export function AnnouncementsFeed({ announcements }: { announcements: Announceme
               {type.label}
             </span>
             <p className="min-w-0 flex-1 text-sm leading-relaxed text-cream">{a.message}</p>
-            <span
-              className="flex shrink-0 items-center gap-1.5 text-[0.65rem] text-sand/60"
-              suppressHydrationWarning
-            >
-              {a.is_pinned ? <Pin size={11} className="text-ember" /> : null}
-              {relativeTime(a.created_at)}
-            </span>
+            {a.is_pinned ? (
+              <Pin size={11} className="mt-0.5 shrink-0 text-ember" />
+            ) : null}
           </div>
         );
       })}

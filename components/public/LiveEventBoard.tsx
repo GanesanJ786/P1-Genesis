@@ -298,6 +298,77 @@ function EventGroupSection({
   );
 }
 
+function CategoryGroupSection({
+  cat,
+  isFirstCategory,
+  eventTitle,
+  statusFilter,
+  sponsors,
+}: {
+  cat: CategoryGroup;
+  isFirstCategory: boolean;
+  eventTitle: string;
+  statusFilter: StatusFilter;
+  sponsors: PdfSponsor[];
+}) {
+  // null = no explicit override yet (only the first discipline opens by
+  // default); true/false = every discipline in this category was just forced
+  // open/closed via the button below. A manual per-discipline toggle after
+  // that still works normally — this only re-applies when forceOpen itself
+  // changes, not on every unrelated re-render.
+  const [forceOpen, setForceOpen] = useState<boolean | null>(null);
+  const allOpen = forceOpen === true;
+
+  return (
+    <details
+      open={statusFilter === "finals" ? true : isFirstCategory}
+      className="group/category"
+    >
+      <summary className="-mx-1 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1.5 transition-colors active:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          size={14}
+          className="shrink-0 text-sand/40 transition-transform group-open/category:rotate-90"
+        />
+        <h3 className="eyebrow flex items-center gap-2 text-ember">
+          {cat.category}
+          {cat.hasLive ? (
+            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+          ) : null}
+        </h3>
+        <span className="ml-auto shrink-0 text-xs text-sand/50">
+          {roundsBadge(cat.doneRounds, cat.totalRounds, statusFilter)}
+        </span>
+      </summary>
+      <div className="space-y-3 pt-3">
+        {statusFilter !== "finals" && cat.events.length > 1 ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault(); // don't let the click bubble into the <summary> and toggle the category itself
+                setForceOpen(!allOpen);
+              }}
+              className="text-xs font-semibold text-ember hover:text-ember-bright"
+            >
+              {allOpen ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
+        ) : null}
+        {cat.events.map((ev, k) => (
+          <EventGroupSection
+            key={ev.key}
+            group={ev}
+            eventTitle={eventTitle}
+            defaultOpen={statusFilter === "finals" ? true : (forceOpen ?? k === 0)}
+            statusFilter={statusFilter}
+            sponsors={sponsors}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function FilterChips({
   label,
   options,
@@ -407,10 +478,10 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeGender, setActiveGender] = useState<string | null>(null);
   const [activeDiscipline, setActiveDiscipline] = useState<string | null>(null);
-  // Age/Gender/Discipline chips are secondary filters — on mobile they cost a
-  // full screen of vertical space before any result shows, so they collapse
-  // behind a "Filters" toggle. Kept open on larger screens (see the panel).
-  const [showFilters, setShowFilters] = useState(false);
+  // Age/Gender/Discipline chips are secondary filters, behind a "Filters"
+  // toggle button — open by default so they're visible on first load; still
+  // collapsible for anyone who wants the extra vertical space back.
+  const [showFilters, setShowFilters] = useState(true);
   // The Filters toggle lives in the sticky search bar, but the panel itself
   // renders further down in normal flow — if the page is scrolled deep into
   // the results, opening it doesn't move the viewport at all, so it looks
@@ -431,10 +502,24 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
     }
     tabBarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [activeTab]);
+  const isFirstFiltersRender = useRef(true);
   useEffect(() => {
+    if (isFirstFiltersRender.current) {
+      isFirstFiltersRender.current = false; // don't force-scroll on initial page load, even though it starts open
+      return;
+    }
     if (showFilters) filterPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [showFilters]);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  // The filter panel now being open by default (taller initial layout) makes
+  // the browser's own scroll restoration / scroll-anchoring land the page
+  // somewhere other than the very top on load or refresh — force it back to
+  // the top on mount, overriding whatever the browser tries to restore.
+  useEffect(() => {
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    window.scrollTo(0, 0);
+  }, []);
   // Whether the Realtime channel is currently subscribed. When it is, the poll
   // stays idle — otherwise a stale (edge-cached, up to ~30s old) poll response
   // races the live update and the value visibly flickers old→new→old.
@@ -464,7 +549,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
     const itemFilter = `event_id=eq.${event.id}`;
     const applyItem = (raw: Record<string, unknown>) => {
       setItems((prev) => upsertById(prev, normalizeLiveItem(raw)));
-      setLastUpdated(new Date());
       lastEventAtRef.current = Date.now();
     };
     const applyAnnouncement = (raw: Record<string, unknown>) => {
@@ -478,7 +562,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
         }
         return [next, ...prev];
       });
-      setLastUpdated(new Date());
       lastEventAtRef.current = Date.now();
     };
 
@@ -500,7 +583,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setItems((prev) => prev.filter((r) => r.id !== id));
-          setLastUpdated(new Date());
           lastEventAtRef.current = Date.now();
         },
       )
@@ -520,7 +602,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-          setLastUpdated(new Date());
           lastEventAtRef.current = Date.now();
         },
       )
@@ -553,7 +634,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
           };
           setItems((prev) => mergeFresh(prev, polled.items ?? []));
           setAnnouncements((prev) => mergeAnnouncements(prev, polled.announcements ?? []));
-          setLastUpdated(new Date());
           lastEventAtRef.current = Date.now();
         }
       } catch { /* silent */ }
@@ -812,14 +892,6 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
             Live · {event.title}
           </span>
         </div>
-        <span className="text-xs text-sand" suppressHydrationWarning>
-          Updated{" "}
-          {lastUpdated.toLocaleTimeString("en-IN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          })}
-        </span>
       </div>
 
       {/* Announcements — delays, lunch break, venue changes */}
@@ -1108,18 +1180,20 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
               {/* Programme: Category → Gender → Event → Round, each level
                   sorted ascending (age/distance-aware) so the order matches
                   how a spectator naturally scans a printed heat sheet.
-                  Category and Gender are collapsible (like Event already
-                  was) and auto-collapse once fully done — keeps a long
-                  multi-category meet from becoming an endless scroll once
-                  earlier age groups have finished. */}
+                  Collapsed by default (only the first Gender group opens) so
+                  a long multi-category meet reads as a compact list rather
+                  than one endless expanded scroll — every level's live/done
+                  badge is still visible on its summary row while collapsed,
+                  so nothing live is hidden, just tucked behind a tap. The
+                  "Finals" status filter is already a narrow, curated list,
+                  so it keeps forcing everything open at every level. */}
               {programme.length > 0 ? (
                 <div className="space-y-4">
-                  {programme.map((g) => {
-                    const genderDone = g.totalRounds > 0 && g.doneRounds === g.totalRounds;
+                  {programme.map((g, i) => {
                     return (
                       <details
                         key={g.key}
-                        open={activeStatus === "finals" ? true : !genderDone}
+                        open={activeStatus === "finals" ? true : i === 0}
                         className="group/gender overflow-hidden rounded-3xl border border-sand/15 bg-ink-soft/20"
                       >
                         <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-4 py-3.5 transition-colors hover:bg-white/[0.02] active:bg-white/[0.05] [&::-webkit-details-marker]:hidden sm:px-5">
@@ -1141,44 +1215,16 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
                           </span>
                         </summary>
                         <div className="space-y-5 border-t border-sand/10 px-4 pb-5 pt-4 sm:px-5">
-                          {g.categories.map((cat) => {
-                            const catDone = cat.totalRounds > 0 && cat.doneRounds === cat.totalRounds;
-                            return (
-                              <details
-                                key={cat.key}
-                                open={activeStatus === "finals" ? true : !catDone}
-                                className="group/category"
-                              >
-                                <summary className="-mx-1 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1.5 transition-colors active:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
-                                  <ChevronRight
-                                    size={14}
-                                    className="shrink-0 text-sand/40 transition-transform group-open/category:rotate-90"
-                                  />
-                                  <h3 className="eyebrow flex items-center gap-2 text-ember">
-                                    {cat.category}
-                                    {cat.hasLive ? (
-                                      <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                                    ) : null}
-                                  </h3>
-                                  <span className="ml-auto shrink-0 text-xs text-sand/50">
-                                    {roundsBadge(cat.doneRounds, cat.totalRounds, activeStatus)}
-                                  </span>
-                                </summary>
-                                <div className="space-y-3 pt-3">
-                                  {cat.events.map((ev) => (
-                                    <EventGroupSection
-                                      key={ev.key}
-                                      group={ev}
-                                      eventTitle={event.title}
-                                      defaultOpen={activeStatus === "finals" ? true : undefined}
-                                      statusFilter={activeStatus}
-                                      sponsors={sponsors}
-                                    />
-                                  ))}
-                                </div>
-                              </details>
-                            );
-                          })}
+                          {g.categories.map((cat, j) => (
+                            <CategoryGroupSection
+                              key={cat.key}
+                              cat={cat}
+                              isFirstCategory={j === 0}
+                              eventTitle={event.title}
+                              statusFilter={activeStatus}
+                              sponsors={sponsors}
+                            />
+                          ))}
                         </div>
                       </details>
                     );

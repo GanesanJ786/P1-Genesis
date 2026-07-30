@@ -88,6 +88,19 @@ export function isFinalHeat(heatLabel: string | null | undefined): boolean {
   return !heatLabel || heatLabel.trim().toLowerCase() === "final";
 }
 
+/** Detects a relay/team race. The schema has no separate team-vs-individual
+ *  flag, so this matches "relay" in the event name or discipline (e.g.
+ *  "4x100m Relay"), which is how relays are already entered today. A relay's
+ *  finisher entry represents the whole team under one name/school — it still
+ *  scores medals/points for that school normally (team scoring only ever
+ *  looks at rank + school), but it must NOT be treated as one athlete: used
+ *  to keep relay rows out of the Individual Rankings leaderboard and out of
+ *  per-athlete participation counts, where counting it would misattribute a
+ *  team's result to a single fake "athlete". */
+export function isRelayEvent(row: Pick<LiveRow, "event_name" | "event_type">): boolean {
+  return /relay/i.test(row.event_name) || /relay/i.test(row.event_type ?? "");
+}
+
 export function roundRank(heat: string | null): number {
   const h = (heat || "").toLowerCase();
   if (h.includes("heat")) return 1;
@@ -379,17 +392,19 @@ export function computeMedalTally(rows: LiveRow[]): MedalTallyRow[] {
 
   for (const row of rows) {
     const finishers = parseFinishers(row.results);
-    for (const f of finishers) {
-      if (!f.school) continue;
-      const key = f.school.toLowerCase().replace(/\s+/g, " ").trim();
-      if (!key) continue;
+    if (!isRelayEvent(row)) {
+      for (const f of finishers) {
+        if (!f.school) continue;
+        const key = f.school.toLowerCase().replace(/\s+/g, " ").trim();
+        if (!key) continue;
 
-      let athletes = schoolAthletes.get(key);
-      if (!athletes) {
-        athletes = new Set();
-        schoolAthletes.set(key, athletes);
+        let athletes = schoolAthletes.get(key);
+        if (!athletes) {
+          athletes = new Set();
+          schoolAthletes.set(key, athletes);
+        }
+        athletes.add(athleteKey(f, f.school));
       }
-      athletes.add(athleteKey(f, f.school));
     }
 
     if (row.status !== "completed" || !isFinalHeat(row.heat_label)) continue;
@@ -463,6 +478,7 @@ export function computeIndividualRankings(rows: LiveRow[]): IndividualRankingRow
 
   for (const row of rows) {
     if (row.status !== "completed" || !isFinalHeat(row.heat_label)) continue;
+    if (isRelayEvent(row)) continue;
     const finishers = parseFinishers(row.results);
 
     for (const f of finishers) {
@@ -610,11 +626,17 @@ export function computeMeetStats(rows: LiveRow[], medalTally: MedalTallyRow[]): 
 
     const finishers = parseFinishers(row.results);
     totalResults += finishers.length;
+    const isRelay = isRelayEvent(row);
 
     for (const f of finishers) {
       const school = f.school || "Unattached";
       const schoolKey = school.toLowerCase().replace(/\s+/g, " ").trim();
       if (!schoolDisplay.has(schoolKey)) schoolDisplay.set(schoolKey, school);
+
+      // A relay's finisher entry represents the whole team under one
+      // name/school, not one athlete — counting it here would undercount
+      // (or fabricate) distinct-athlete totals. See isRelayEvent.
+      if (isRelay) continue;
 
       const key = athleteKey(f, school);
       if (!athletes.has(key)) athletes.set(key, { gender: row.gender ?? "", school });
