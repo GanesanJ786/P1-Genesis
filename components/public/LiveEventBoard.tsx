@@ -644,12 +644,16 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
     // trusted forever. If nothing has actually arrived in a while, poll
     // anyway as a self-healing safety net, independent of reconnectKey ever
     // firing (which only covers this tab's own focus/visibility changes).
-    const STALE_MS = 20_000;
+    // Kept tight (parents watching live results shouldn't wait ~20-30s for a
+    // stuck tab to catch up on its own) — matches the API route's own
+    // shortened cache window below, so a catch-up poll gets fresh data
+    // instead of hitting a still-old edge-cached response.
+    const STALE_MS = 8_000;
     const id = setInterval(() => {
       const idleFor = Date.now() - lastEventAtRef.current;
       if (realtimeConnected.current && idleFor < STALE_MS) return;
       poll();
-    }, 10_000);
+    }, 5_000);
 
     // On regaining focus/visibility, don't trust realtimeConnected — a
     // backgrounded tab's WebSocket may be a silent zombie. Poll immediately

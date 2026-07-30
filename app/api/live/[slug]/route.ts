@@ -8,10 +8,10 @@ import { getLiveEventBySlug, getLiveItems, getAnnouncements } from "@/lib/querie
  * 10s poll from every phone in the stadium into a direct Supabase hit.
  */
 export const dynamic = "force-static";
-export const revalidate = 10;
+export const revalidate = 5;
 
 const CACHE_HEADERS = {
-  "Cache-Control": "public, s-maxage=10, stale-while-revalidate=20",
+  "Cache-Control": "public, s-maxage=5, stale-while-revalidate=10",
 };
 
 export async function GET(
