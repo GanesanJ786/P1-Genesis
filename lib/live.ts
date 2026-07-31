@@ -159,6 +159,13 @@ function normalizeResult(raw: unknown): string {
   if (/^[-–—.\s]+$/.test(s)) return ""; // only dashes/dots/spaces = no time
   if (/^(n\/?a|nil|tbd|tba)$/i.test(s)) return ""; // "no data" placeholders
   if (/^(dnf|dns|dq)$/i.test(s)) return s.toUpperCase(); // real athletics status codes — keep
+  // A bare whole number ("10") reads inconsistently next to others in the
+  // same table that were typed with a decimal ("9.8", "10.2") — pad it to
+  // one decimal place ("10.0"). Only a plain integer string qualifies —
+  // anything already carrying a decimal (any precision) is left exactly as
+  // typed, never rounded/truncated, and a unit-suffixed distance (e.g.
+  // "12m") is left alone too since it isn't purely digits.
+  if (/^\d+$/.test(s)) return `${s}.0`;
   return s;
 }
 

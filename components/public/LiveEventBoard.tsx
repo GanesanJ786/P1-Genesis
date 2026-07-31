@@ -774,16 +774,32 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
   );
 
   // Nearest upcoming scheduled item across all days — the "what's next" glance.
-  // The Countdown flips to "Starting soon" once its time passes, and the item
-  // leaves this set the moment admin marks it live.
+  // Excludes anything already past its scheduled time (a race can sit at
+  // "upcoming"/"finalist" status well past its slot if it's running late or
+  // nobody's flipped it to Live yet) — a stale overdue time reads as broken,
+  // not "next". Ticked periodically so a race naturally drops out of "Next
+  // Up" once its time passes even if no new item data arrives in the
+  // meantime (the countdown itself re-renders every second, but which race
+  // is "next" was previously only ever recomputed when `items` changed).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const nextUp = useMemo(() => {
     return items
-      .filter((r) => (r.status === "upcoming" || r.status === "finalist") && r.scheduled_at)
+      .filter(
+        (r) =>
+          (r.status === "upcoming" || r.status === "finalist") &&
+          r.scheduled_at &&
+          new Date(r.scheduled_at).getTime() >= now,
+      )
       .sort(
         (a, b) =>
           new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime(),
       )[0];
-  }, [items]);
+  }, [items, now]);
 
   const medalTally = useMemo(() => computeMedalTally(items), [items]);
   const individualRankings = useMemo(() => computeIndividualRankings(items), [items]);
