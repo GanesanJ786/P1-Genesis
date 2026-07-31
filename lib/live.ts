@@ -537,8 +537,12 @@ export type IndividualResultRow = {
 /**
  * Flattens every row's finishers into one browsable list — every heat and
  * final an athlete has run, not just medal-eligible finals (that's
- * computeMedalTally's job). Sorted event → gender → round → rank, the same
- * numeric-aware ordering used throughout the live programme.
+ * computeMedalTally's job). Sorted gender → event → category → round → rank
+ * — gender leads so every Boys result comes before any Girls result (rather
+ * than alternating event-by-event), then event/category keep every category
+ * within that gender contiguous (e.g. all of BOYS6 together, then BOYS8)
+ * instead of interleaving in whatever order rows happen to sit in the
+ * database.
  */
 export function computeIndividualResults(rows: LiveRow[]): IndividualResultRow[] {
   const out: IndividualResultRow[] = [];
@@ -576,9 +580,11 @@ export function computeIndividualResults(rows: LiveRow[]): IndividualResultRow[]
 
   return out.sort(
     (a, b) =>
+      genderSortKey(a.gender) - genderSortKey(b.gender) ||
       eventSortKey(a.event) - eventSortKey(b.event) ||
       a.event.localeCompare(b.event) ||
-      genderSortKey(a.gender) - genderSortKey(b.gender) ||
+      categorySortKey(a.category) - categorySortKey(b.category) ||
+      a.category.localeCompare(b.category) ||
       roundRank(a.round) - roundRank(b.round) ||
       roundNumber(a.round) - roundNumber(b.round) ||
       a.rank - b.rank,

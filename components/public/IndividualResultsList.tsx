@@ -3,6 +3,36 @@
 import { useState } from "react";
 import { Building2, Download, ListFilter, Loader2, Share2, Trophy } from "lucide-react";
 import { dqFullReason, displayResult, isDisqualified, isFinalHeat, type IndividualResultRow } from "@/lib/live";
+
+/** One Event/Category/Gender/Round section within the results list — built
+ *  by scanning consecutive rows for a changed key, not re-sorting, since
+ *  `rows` already arrives pre-sorted by exactly this key (computeIndividualResults).
+ *  Without this grouping, a flat list only distinguished one race from the
+ *  next by a tiny inline label, which read as one long undifferentiated
+ *  scroll — especially where a Boys group's rows end and a Girls group's
+ *  rows begin right below with no visual break. */
+type ResultGroup = {
+  key: string;
+  round: string;
+  event: string;
+  category: string;
+  gender: string;
+  items: IndividualResultRow[];
+};
+
+function groupConsecutive(items: IndividualResultRow[]): ResultGroup[] {
+  const groups: ResultGroup[] = [];
+  for (const r of items) {
+    const key = `${r.event}|${r.category}|${r.gender}|${r.round}`;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(r);
+    } else {
+      groups.push({ key, round: r.round, event: r.event, category: r.category, gender: r.gender, items: [r] });
+    }
+  }
+  return groups;
+}
 import type { PdfSponsor } from "@/lib/live-pdf";
 
 const PAGE_SIZE = 50;
@@ -151,6 +181,7 @@ export function IndividualResultsList({
   }
 
   const visible = filtered.slice(0, visibleCount);
+  const groups = groupConsecutive(visible);
   const scopeLabel = institution ?? "All Individual Results";
 
   const share = async () => {
@@ -242,56 +273,64 @@ export function IndividualResultsList({
         </p>
       ) : (
         <>
-          <div className="space-y-2">
-            {visible.map((r, i) => (
-              <div
-                key={`${r.rowId}-${r.rank}-${r.bib ?? r.name}-${i}`}
-                className={`rounded-xl px-3 py-3 ${
-                  r.medal ? "bg-amber-500/10 ring-1 ring-amber-500/20" : "bg-white/[0.03]"
-                }`}
-              >
-                <p className="mb-1.5 flex flex-wrap items-center gap-x-1.5 text-[0.65rem] uppercase tracking-widest text-sand/50">
-                  <span>{r.round}</span>
-                  <span>·</span>
-                  <span>{r.event}</span>
-                  <span>·</span>
-                  <span>{r.category}</span>
-                  <span>·</span>
-                  <span>{r.gender}</span>
-                </p>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold tabular-nums text-sand">
-                    {r.rank}
+          <div className="space-y-6">
+            {groups.map((g) => (
+              <div key={g.key}>
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-sand/10 pb-2">
+                  <span className="shrink-0 rounded bg-ember/15 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-ember">
+                    {g.round}
                   </span>
-                  {r.bib ? (
-                    <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-sand">
-                      {r.bib}
-                    </span>
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-cream">
-                      <span className="truncate">{r.name}</span>
-                      {isDisqualified(r) ? (
-                        <span
-                          className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-400"
-                          title={dqFullReason(r) ?? "Disqualified"}
-                        >
-                          DQ
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="truncate text-xs text-sand/70">{r.school || "Unattached"}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p
-                      className={`text-sm font-bold tabular-nums ${
-                        isDisqualified(r) ? "text-rose-400" : "text-ember"
+                  <h4 className="font-display text-base uppercase leading-tight text-cream">
+                    {g.event}
+                  </h4>
+                  <span className="text-xs text-sand/60">
+                    {g.category} · {g.gender}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {g.items.map((r, i) => (
+                    <div
+                      key={`${r.rowId}-${r.rank}-${r.bib ?? r.name}-${i}`}
+                      className={`rounded-xl px-3 py-3 ${
+                        r.medal ? "bg-amber-500/10 ring-1 ring-amber-500/20" : "bg-white/[0.03]"
                       }`}
                     >
-                      {displayResult(r) || "—"}
-                    </p>
-                    {r.medal ? <p className="text-xs">{MEDALS[r.medal]}</p> : null}
-                  </div>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold tabular-nums text-sand">
+                          {r.rank}
+                        </span>
+                        {r.bib ? (
+                          <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-sand">
+                            {r.bib}
+                          </span>
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-1.5 text-sm font-semibold text-cream">
+                            <span className="truncate">{r.name}</span>
+                            {isDisqualified(r) ? (
+                              <span
+                                className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-400"
+                                title={dqFullReason(r) ?? "Disqualified"}
+                              >
+                                DQ
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="truncate text-xs text-sand/70">{r.school || "Unattached"}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p
+                            className={`text-sm font-bold tabular-nums ${
+                              isDisqualified(r) ? "text-rose-400" : "text-ember"
+                            }`}
+                          >
+                            {displayResult(r) || "—"}
+                          </p>
+                          {r.medal ? <p className="text-xs">{MEDALS[r.medal]}</p> : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
