@@ -115,6 +115,17 @@ export function isPastEvent(e: EventItem, now: Date = new Date()): boolean {
   return end.getTime() < now.getTime();
 }
 
+/** True once an event's start date has arrived but it hasn't finished yet —
+ *  splitEvents() only flips "upcoming" -> "past" at the END date, so a
+ *  multi-day event reads as "upcoming" for its entire run; this is what lets
+ *  the Events listing swap Register for a "Track live" CTA once it's
+ *  actually underway. */
+export function isOngoingEvent(e: EventItem, now: Date = new Date()): boolean {
+  if (!e.start_date || isPastEvent(e, now)) return false;
+  const start = new Date(`${e.start_date}T00:00:00`);
+  return start.getTime() <= now.getTime();
+}
+
 /**
  * Split events into upcoming (soonest first) and past/successful (most recent
  * first). Upcoming events are always surfaced with priority.

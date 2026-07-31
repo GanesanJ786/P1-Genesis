@@ -295,7 +295,13 @@ function computeCategoryEventGroups(values, headerIdx) {
       continue;
     }
 
-    const groupKey = category.toUpperCase() + " " + gender.toUpperCase();
+    // Assumes Category is age-only (e.g. "U12") and folds Gender in — but
+    // some rosters already write gender into Category itself (e.g.
+    // "BOYS10"), which would otherwise double up into "BOYS10 BOYS". Skip
+    // the append when Category already contains this row's Gender.
+    const categoryUpper = category.toUpperCase();
+    const genderUpper = gender.toUpperCase();
+    const groupKey = categoryUpper.indexOf(genderUpper) !== -1 ? categoryUpper : categoryUpper + " " + genderUpper;
 
     if (!groups[groupKey]) {
       groups[groupKey] = {};
@@ -504,7 +510,14 @@ function buildCategorySheet(sheet, category, eventCounts, bibColLetter, nameColL
     // block" philosophy elsewhere): an operator can still type a custom
     // detail straight into the cell past the suggested options.
     const reasonRule = SpreadsheetApp.newDataValidation().requireValueInList(DQ_REASONS).setAllowInvalid(true).build();
-    sheet.getRangeList(dataRowRanges.map(function (rr) { return "M" + rr.start + ":M" + (rr.start + rr.count - 1); })).setDataValidation(reasonRule);
+    // Unlike setFontWeight()/insertCheckboxes() above, RangeList has no
+    // setDataValidation() — Apps Script only exposes that on a single Range —
+    // so this one stays a per-block loop (same small count as the mergeRows
+    // loop above, not per-row, so it doesn't reintroduce the call-count
+    // problem the comment above this block is about).
+    dataRowRanges.forEach(function (rr) {
+      sheet.getRange("M" + rr.start + ":M" + (rr.start + rr.count - 1)).setDataValidation(reasonRule);
+    });
   }
   if (finalStartedHeaderRows.length) {
     sheet.getRangeList(finalStartedHeaderRows.map(function (r) { return "H" + r; })).insertCheckboxes(); // H Started

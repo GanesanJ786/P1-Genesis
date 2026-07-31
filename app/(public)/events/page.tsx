@@ -4,7 +4,7 @@ import { PageHero } from "@/components/public/PageHero";
 import { Reveal } from "@/components/public/Reveal";
 import { EventCard } from "@/components/public/EventCard";
 import { getPublishedEvents } from "@/lib/queries";
-import { splitEvents } from "@/lib/events";
+import { splitEvents, isOngoingEvent } from "@/lib/events";
 import { cardGridClass } from "@/lib/utils";
 import { SITE } from "@/lib/constants";
 
@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 export default async function EventsPage() {
   const events = await getPublishedEvents();
   const { upcoming, past } = splitEvents(events);
+  const hasLiveNow = upcoming.some((e) => isOngoingEvent(e) && e.live_tracking);
 
   return (
     <>
@@ -33,18 +34,28 @@ export default async function EventsPage() {
       <Section>
         <Container>
           {/* Upcoming — shown first, with priority */}
-          <SectionHeading eyebrow="Register Now" title="Upcoming Events" />
+          <SectionHeading
+            eyebrow={hasLiveNow ? "Happening Now" : "Register Now"}
+            title="Upcoming Events"
+          />
           {upcoming.length === 0 ? (
             <p className="text-sand">
               New events are being finalised — check back soon.
             </p>
           ) : (
             <div className={cardGridClass(upcoming.length)}>
-              {upcoming.map((event, i) => (
-                <Reveal key={event.id} delay={(i % 3) * 0.06}>
-                  <EventCard event={event} />
-                </Reveal>
-              ))}
+              {upcoming.map((event, i) => {
+                const live = isOngoingEvent(event) && event.live_tracking;
+                return (
+                  <Reveal key={event.id} delay={(i % 3) * 0.06}>
+                    <EventCard
+                      event={event}
+                      live={live}
+                      href={live ? `/live/${event.slug}` : undefined}
+                    />
+                  </Reveal>
+                );
+              })}
             </div>
           )}
         </Container>
