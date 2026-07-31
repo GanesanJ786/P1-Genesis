@@ -786,6 +786,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
+  
 
   const nextUp = useMemo(() => {
     return items
