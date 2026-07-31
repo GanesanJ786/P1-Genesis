@@ -243,7 +243,7 @@ function buildQualifiedShareText(rows: LiveRow[], eventTitle: string, url: strin
     const label = [r.event_name, r.category, r.gender].filter(Boolean).join(" · ");
     const finishers = parseFinishers(r.results).sort((a, b) => a.rank - b.rank);
     const athleteLines = finishers.map(
-      (f) => `  ${f.bib ? `${f.bib} ` : ""}${f.name} (${f.school || "Unattached"})`,
+      (f) => `  ${f.bib ? `${f.bib} ` : ""}${f.name.toUpperCase()} (${(f.school || "Unattached").toUpperCase()})`,
     );
     return [`🏁 ${label} — Final`, ...athleteLines];
   });

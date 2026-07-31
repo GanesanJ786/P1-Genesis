@@ -178,8 +178,8 @@ function resultRows(item: LiveRow): string[][] {
   const rows = parseFinishers(item.results).map((f) => [
     String(f.rank),
     f.bib ?? "",
-    f.name,
-    f.school ?? "",
+    f.name.toUpperCase(),
+    (f.school ?? "").toUpperCase(),
     dqShortLabel(f) || f.result || "",
     f.record ?? "",
   ]);
@@ -191,7 +191,7 @@ function resultRows(item: LiveRow): string[][] {
 function dqFootnotes(item: LiveRow): string[] {
   return parseFinishers(item.results)
     .filter((f) => f.disqualified && f.disqualificationReason === "Other" && f.disqualificationNote)
-    .map((f) => `* ${f.name}: ${f.disqualificationNote}`);
+    .map((f) => `* ${f.name.toUpperCase()}: ${f.disqualificationNote}`);
 }
 
 /** Draws the results table and any DQ footnotes beneath it; returns the Y
@@ -652,8 +652,8 @@ function individualResultRow(r: IndividualResultRow): string[] {
     r.gender,
     String(r.rank),
     r.bib ?? "",
-    r.name,
-    r.school || "",
+    r.name.toUpperCase(),
+    (r.school || "").toUpperCase(),
     displayResult(r) || "",
     r.medal ? MEDAL_LABEL[r.medal] : "",
   ];

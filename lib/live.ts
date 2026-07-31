@@ -712,11 +712,11 @@ export function buildShareText(row: LiveRow, url: string): string {
         ? (SHARE_MEDALS[f.rank - 1] ?? `#${f.rank}`)
         : `#${f.rank}`;
     const bib = f.bib ? `${f.bib} ` : "";
-    const school = f.school ? ` (${f.school})` : "";
+    const school = f.school ? ` (${f.school.toUpperCase()})` : "";
     const display = displayResult(f);
     const mark = display ? ` — ${display}` : "";
     const rec = f.record ? ` [${f.record}]` : "";
-    return `${pos} ${bib}${f.name}${school}${mark}${rec}`;
+    return `${pos} ${bib}${f.name.toUpperCase()}${school}${mark}${rec}`;
   });
   return [`🏆 ${header}`, ...lines, `Full results: ${url}`].join("\n");
 }

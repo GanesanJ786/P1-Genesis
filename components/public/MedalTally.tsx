@@ -40,7 +40,7 @@ export function MedalTally({
                 {i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-cream">{row.school}</p>
+                <p className="truncate text-sm font-semibold uppercase text-cream">{row.school}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-sand/70">
                   <span>{row.participants} athlete{row.participants === 1 ? "" : "s"}</span>
                   <span>🥇 {row.gold}</span>

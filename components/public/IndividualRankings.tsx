@@ -44,10 +44,10 @@ export function IndividualRankings({
                       {row.bib}
                     </span>
                   ) : null}
-                  <span className="truncate">{row.name}</span>
+                  <span className="truncate uppercase">{row.name}</span>
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-sand/70">
-                  <span className="truncate">{row.school}</span>
+                  <span className="truncate uppercase">{row.school}</span>
                   {row.gold ? <span>🥇 {row.gold}</span> : null}
                   {row.silver ? <span>🥈 {row.silver}</span> : null}
                   {row.bronze ? <span>🥉 {row.bronze}</span> : null}

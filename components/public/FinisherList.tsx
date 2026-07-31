@@ -71,7 +71,7 @@ export function FinisherList({
                     {entry.bib}
                   </span>
                 ) : null}
-                <span className="truncate">{entry.name}</span>
+                <span className="truncate uppercase">{entry.name}</span>
                 {entry.record ? (
                   <span
                     className={`shrink-0 rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
@@ -98,7 +98,7 @@ export function FinisherList({
                 ) : null}
               </p>
               {entry.school ? (
-                <p className="truncate text-xs text-sand/80">{entry.school}</p>
+                <p className="truncate text-xs uppercase text-sand/80">{entry.school}</p>
               ) : null}
             </div>
 

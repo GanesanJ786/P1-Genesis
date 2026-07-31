@@ -161,7 +161,7 @@ export function MeetOverview({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold text-sand">
                       {i + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-cream">{s.school}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm uppercase text-cream">{s.school}</span>
                     <span className="shrink-0 text-sm font-semibold text-ember">{s.count}</span>
                   </div>
                 ))}

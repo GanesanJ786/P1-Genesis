@@ -70,7 +70,7 @@ function buildShareText(rows: IndividualResultRow[], scopeLabel: string, eventTi
     const meta = [r.event, r.category, r.gender, r.round].filter(Boolean).join(" · ");
     const resultText = displayResult(r);
     const mark = resultText ? ` — ${resultText}` : "";
-    return `${r.rank}. ${medal}${bib}${r.name} (${r.school || "Unattached"})${mark} [${meta}]`;
+    return `${r.rank}. ${medal}${bib}${r.name.toUpperCase()} (${(r.school || "Unattached").toUpperCase()})${mark} [${meta}]`;
   });
   return [`🏆 ${eventTitle} — ${scopeLabel}`, ...lines, `Full results: ${url}`].join("\n");
 }
@@ -84,12 +84,19 @@ function FilterSelect({
   value,
   options,
   onChange,
+  optionsUppercase = false,
 }: {
   icon: typeof Building2;
   label: string;
   value: string | null;
   options: string[];
   onChange: (v: string | null) => void;
+  /** Institution names read better in caps, matching the uppercase treatment
+   *  used everywhere else a school/club name appears. Transforms only the
+   *  visible option text — `value` stays the original string so filtering
+   *  (which compares against each row's raw, non-uppercased r.school) still
+   *  matches correctly. */
+  optionsUppercase?: boolean;
 }) {
   return (
     <div className="relative">
@@ -103,7 +110,7 @@ function FilterSelect({
         <option value="">All {label}</option>
         {options.map((o) => (
           <option key={o} value={o}>
-            {o}
+            {optionsUppercase ? o.toUpperCase() : o}
           </option>
         ))}
       </select>
@@ -240,6 +247,7 @@ export function IndividualResultsList({
           value={institution}
           options={institutions}
           onChange={onInstitutionChange}
+          optionsUppercase
         />
         <FilterSelect
           icon={ListFilter}
@@ -306,7 +314,7 @@ export function IndividualResultsList({
                         ) : null}
                         <div className="min-w-0 flex-1">
                           <p className="flex items-center gap-1.5 text-sm font-semibold text-cream">
-                            <span className="truncate">{r.name}</span>
+                            <span className="truncate uppercase">{r.name}</span>
                             {isDisqualified(r) ? (
                               <span
                                 className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-400"
@@ -316,7 +324,7 @@ export function IndividualResultsList({
                               </span>
                             ) : null}
                           </p>
-                          <p className="truncate text-xs text-sand/70">{r.school || "Unattached"}</p>
+                          <p className="truncate text-xs uppercase text-sand/70">{r.school || "Unattached"}</p>
                         </div>
                         <div className="shrink-0 text-right">
                           <p
