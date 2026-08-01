@@ -1063,6 +1063,7 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
                       defaultOpen
                       highlight={q}
                       sponsors={sponsors}
+                      showEventMeta
                     />
                   ))}
                 </div>

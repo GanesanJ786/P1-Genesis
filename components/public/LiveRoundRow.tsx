@@ -41,12 +41,21 @@ export function LiveRoundRow({
   defaultOpen = false,
   highlight,
   sponsors,
+  showEventMeta = false,
 }: {
   item: LiveRow;
   eventTitle: string;
   defaultOpen?: boolean;
   highlight?: string;
   sponsors: PdfSponsor[];
+  /** Show the Event/Category/Gender line in the header. Off by default since
+   *  this row is normally nested inside a group section that already shows
+   *  that context once for the whole group (see LiveEventBoard's
+   *  EventGroupSection/CategoryGroupSection) — repeating it per round there
+   *  would just reintroduce the clutter that grouping was built to remove.
+   *  Turned on only where LiveRoundRow renders standalone with no such
+   *  wrapper, e.g. the page-wide search results list. */
+  showEventMeta?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -65,6 +74,7 @@ export function LiveRoundRow({
   };
   const isFinal = isFinalHeat(item.heat_label);
   const roundName = item.heat_label || "Final";
+  const eventMeta = [item.event_name, item.category, item.gender].filter(Boolean).join(" · ");
   const isUpcoming = item.status === "upcoming";
   const isFinalistStage = item.status === "finalist";
   const isCompleted = item.status === "completed";
@@ -85,27 +95,34 @@ export function LiveRoundRow({
   );
 
   const header = (
-    <div className="flex items-center gap-2.5">
-      <span className="w-16 shrink-0 text-sm font-semibold text-cream sm:w-24">
-        {roundName}
-      </span>
-      <div className="min-w-0 flex-1 truncate text-xs">
-        {hasResults ? null : isUpcoming && item.scheduled_at ? (
-          <span className="inline-flex items-center gap-2 text-sand">
-            <span className="text-cream/90">{formatScheduledTime(item.scheduled_at)}</span>
-            <Countdown iso={item.scheduled_at} />
-          </span>
-        ) : isUpcoming ? (
-          <span className="text-sand/60">Yet to start</span>
-        ) : (
-          <span className="italic text-sand/60">In progress…</span>
-        )}
+    <div>
+      {showEventMeta && eventMeta ? (
+        <p className="mb-1 truncate text-[0.7rem] font-semibold uppercase tracking-wide text-ember">
+          {eventMeta}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2.5">
+        <span className="w-16 shrink-0 text-sm font-semibold text-cream sm:w-24">
+          {roundName}
+        </span>
+        <div className="min-w-0 flex-1 truncate text-xs">
+          {hasResults ? null : isUpcoming && item.scheduled_at ? (
+            <span className="inline-flex items-center gap-2 text-sand">
+              <span className="text-cream/90">{formatScheduledTime(item.scheduled_at)}</span>
+              <Countdown iso={item.scheduled_at} />
+            </span>
+          ) : isUpcoming ? (
+            <span className="text-sand/60">Yet to start</span>
+          ) : (
+            <span className="italic text-sand/60">In progress…</span>
+          )}
+        </div>
+        {statusPill}
+        <ChevronRight
+          size={15}
+          className={`shrink-0 text-sand/40 transition-transform ${open ? "rotate-90" : ""}`}
+        />
       </div>
-      {statusPill}
-      <ChevronRight
-        size={15}
-        className={`shrink-0 text-sand/40 transition-transform ${open ? "rotate-90" : ""}`}
-      />
     </div>
   );
 
