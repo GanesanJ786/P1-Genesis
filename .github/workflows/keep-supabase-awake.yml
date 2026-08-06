@@ -1,0 +1,21 @@
+name: Keep Supabase awake
+
+# Supabase's free tier auto-pauses a project after 7 days with no database
+# activity — once paused, the site breaks until someone manually restores it
+# from the dashboard. This just requests the homepage daily, which queries
+# Supabase for events/team/slides/content (see app/(public)/page.tsx),
+# resetting that inactivity clock. Runs well inside the 7-day window so a
+# single missed/delayed run (GitHub's cron scheduler isn't second-precise)
+# still leaves plenty of margin.
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily (~8:30am IST)
+  workflow_dispatch: {} # allows a manual "Run workflow" click to test it
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the live site
+        run: |
+          curl -fsS -o /dev/null -w "Response: %{http_code}\n" https://gsfteams.com/
