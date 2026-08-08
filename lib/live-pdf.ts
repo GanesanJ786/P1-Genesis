@@ -236,6 +236,72 @@ function lastY(doc: JsPdf, fallback: number): number {
   );
 }
 
+// fontSize 8.5 / cellPadding 2.2 (both large-table callers below use these):
+// rowHeight ≈ (fontSize/2.8346)*1.15 + cellPadding*2 ≈ 7.85mm.
+const AUTOTABLE_ROW_H = 7.85;
+
+/**
+ * Draws a (potentially very large) flat table in `chunkSize`-row batches,
+ * each followed by a real `yieldToMain()` — jspdf-autotable draws its whole
+ * `body` in one uninterrupted synchronous pass with no async/chunked API of
+ * its own, so for a 1000+ row table (an entire completed meet's individual
+ * results, or its full schedule) that single pass can run long enough to
+ * risk the browser's main-thread-unresponsive handling on weaker/lower-
+ * memory Android devices — this is why downloads of those two reports were
+ * hanging/failing right after a meet finished (small during the event,
+ * since most rows didn't exist yet).
+ *
+ * `chunkSize` is chosen by callers to stay safely under how many rows fit
+ * on a FRESH page (see `AUTOTABLE_ROW_H`), so a chunk essentially never
+ * needs its own internal page break — that matters because WE, not
+ * autoTable, decide when a new page starts here: autoTable draws `head`
+ * unconditionally at a call's own `startY`, then auto-repeats it only on
+ * pages *that same call* inserts. Re-passing `head` on every chunk would
+ * draw a duplicate header mid-page; omitting it on every continuation
+ * chunk would leave a chunk that overflows onto a new page without one.
+ * So a fresh page (whether the very first chunk, or a chunk that doesn't
+ * fit in the remaining space on the current page) always gets the real
+ * head; any other chunk continues seamlessly with none.
+ */
+async function drawChunkedTable(
+  autoTable: AutoTable,
+  doc: JsPdf,
+  pageH: number,
+  startY: number,
+  head: string[][],
+  body: string[][],
+  chunkSize: number,
+  columnStyles: NonNullable<Parameters<AutoTable>[1]>["columnStyles"],
+): Promise<void> {
+  let y = startY;
+  let first = true;
+  for (let i = 0; i < body.length; i += chunkSize) {
+    const chunkBody = body.slice(i, i + chunkSize);
+    let chunkHead: string[][] = [];
+    if (first) {
+      chunkHead = head;
+      first = false;
+    } else if (pageH - SPONSOR_FOOTER_RESERVED_H - y < chunkSize * AUTOTABLE_ROW_H) {
+      doc.addPage();
+      y = 16;
+      chunkHead = head;
+    }
+    autoTable(doc, {
+      startY: y,
+      head: chunkHead,
+      body: chunkBody,
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
+      headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
+      alternateRowStyles: { fillColor: STRIPE },
+      margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
+      columnStyles,
+    });
+    y = lastY(doc, y);
+    await yieldToMain();
+  }
+}
+
 /** A sponsor as needed for the PDF footer — pre-resolved to a real logo URL
  *  (or null) so this module never has to know about Supabase Storage paths. */
 export type PdfSponsor = {
@@ -592,24 +658,14 @@ export async function downloadSchedulePdf(
   const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, "SCHEDULE");
 
-  // autoTable draws every row of a potentially large schedule in one
-  // uninterrupted synchronous pass — one last yield right before it gives the
-  // browser a final chance to paint (e.g. the busy spinner) before that block.
-  await yieldToMain();
-  autoTable(doc, {
-    startY: bandH + 10,
-    head: SCHEDULE_TABLE_HEAD,
-    body: schedule.map(scheduleRow),
-    theme: "grid",
-    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
-    headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: STRIPE },
-    margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
-    columnStyles: {
-      0: { cellWidth: 16, halign: "center" },
-      3: { cellWidth: 16, halign: "center" },
-      4: { cellWidth: 20, halign: "center" },
-    },
+  // A full-meet schedule can be hundreds of races — drawn in chunks (see
+  // drawChunkedTable) so the main thread yields repeatedly instead of
+  // blocking in one uninterrupted pass. 20 rows/chunk stays safely under
+  // how many rows fit on a fresh portrait page at this font size.
+  await drawChunkedTable(autoTable, doc, pageH, bandH + 10, SCHEDULE_TABLE_HEAD, schedule.map(scheduleRow), 20, {
+    0: { cellWidth: 16, halign: "center" },
+    3: { cellWidth: 16, halign: "center" },
+    4: { cellWidth: 20, halign: "center" },
   });
 
   const pages = doc.getNumberOfPages();
@@ -681,25 +737,18 @@ export async function downloadIndividualResultsPdf(
   const sponsorsPromise = loadSponsorLogos(sponsors);
   const bandH = await drawHeaderBand(doc, pageW, eventTitle, scopeLabel.toUpperCase());
 
-  // This is the PDF most likely to be "large data" (an entire meet's worth of
-  // individual results) — one last yield right before autoTable's single
-  // uninterrupted synchronous pass over every row.
-  await yieldToMain();
-  autoTable(doc, {
-    startY: bandH + 8,
-    head: INDIVIDUAL_RESULTS_HEAD,
-    body: rows.map(individualResultRow),
-    theme: "grid",
-    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
-    headStyles: { fillColor: EMBER, textColor: [255, 255, 255], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: STRIPE },
-    margin: { top: 16, bottom: SPONSOR_FOOTER_RESERVED_H },
-    columnStyles: {
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 16, halign: "center" },
-      8: { cellWidth: 22, halign: "right", fontStyle: "bold" },
-      9: { cellWidth: 20, halign: "center" },
-    },
+  // This is the PDF most likely to be "large data" (an entire meet's worth
+  // of individual results, potentially 1000+ rows once it's over) — drawn
+  // in chunks (see drawChunkedTable) so the main thread yields repeatedly
+  // instead of blocking in one uninterrupted pass. 15 rows/chunk stays
+  // safely under how many rows fit on a fresh landscape page at this font
+  // size (fewer than the Schedule PDF's 20, since this table's margin
+  // reserves the same footer height on a shorter landscape page).
+  await drawChunkedTable(autoTable, doc, pageH, bandH + 8, INDIVIDUAL_RESULTS_HEAD, rows.map(individualResultRow), 15, {
+    4: { cellWidth: 12, halign: "center" },
+    5: { cellWidth: 16, halign: "center" },
+    8: { cellWidth: 22, halign: "right", fontStyle: "bold" },
+    9: { cellWidth: 20, halign: "center" },
   });
 
   const pages = doc.getNumberOfPages();

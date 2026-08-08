@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Download, ListFilter, Loader2, Share2, Trophy } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Building2, Download, ListFilter, Loader2, Share2, Trophy } from "lucide-react";
 import { dqFullReason, displayResult, isDisqualified, isFinalHeat, type IndividualResultRow } from "@/lib/live";
+import { Button } from "@/components/ui/Button";
 
 /** One Event/Category/Gender/Round section within the results list — built
  *  by scanning consecutive rows for a changed key, not re-sorting, since
@@ -36,6 +38,16 @@ function groupConsecutive(items: IndividualResultRow[]): ResultGroup[] {
 import type { PdfSponsor } from "@/lib/live-pdf";
 
 const PAGE_SIZE = 50;
+
+// Above this, warn before generating — a full completed meet with every
+// filter cleared can be 1000+ rows, and even a single round-stage scope
+// (e.g. "Winners" — every medalist across the whole meet) can still run
+// into the hundreds. Even chunked (see drawChunkedTable in lib/live-pdf.ts)
+// that genuinely takes a while on a weak phone. This is a heads-up, not a
+// hard block — "Download anyway" still proceeds. Kept low enough to catch
+// any single-round-stage "whole meet" scope, not just the fully-unfiltered
+// worst case.
+const LARGE_PDF_ROW_THRESHOLD = 200;
 
 const MEDALS: Record<"Gold" | "Silver" | "Bronze", string> = {
   Gold: "🥇",
@@ -158,6 +170,7 @@ export function IndividualResultsList({
   sponsors: PdfSponsor[];
 }) {
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [showLargeDownloadWarning, setShowLargeDownloadWarning] = useState(false);
 
   // Not every meet uses every round stage (e.g. a meet with no Semifinals
   // anywhere) — only offer a round chip when at least one row actually
@@ -204,7 +217,7 @@ export function IndividualResultsList({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
-  const downloadPdf = async () => {
+  const generatePdf = async () => {
     setPdfBusy(true);
     try {
       const { downloadIndividualResultsPdf } = await import("@/lib/live-pdf");
@@ -214,7 +227,16 @@ export function IndividualResultsList({
     }
   };
 
+  const downloadPdf = () => {
+    if (filtered.length > LARGE_PDF_ROW_THRESHOLD) {
+      setShowLargeDownloadWarning(true);
+      return;
+    }
+    generatePdf();
+  };
+
   return (
+    <>
     <section aria-label="Individual results">
       <div className="mb-4 flex items-center justify-between gap-2">
         <p className="eyebrow">All Individual Results</p>
@@ -358,5 +380,59 @@ export function IndividualResultsList({
         </>
       )}
     </section>
+
+    {showLargeDownloadWarning
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/80 p-4 backdrop-blur-sm"
+            onClick={() => setShowLargeDownloadWarning(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl border border-sand/15 bg-ink-soft p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ember/15 text-ember">
+                  <AlertTriangle size={20} />
+                </span>
+                <div>
+                  <p className="font-display text-base uppercase tracking-wide text-cream">
+                    Large download
+                  </p>
+                  <p className="mt-1.5 text-sm text-sand">
+                    This report has{" "}
+                    <span className="font-semibold text-cream">{filtered.length}</span>{" "}
+                    results and may take a while — or fail — on some phones. Narrow it
+                    down with the filters above, or continue anyway.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowLargeDownloadWarning(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setShowLargeDownloadWarning(false);
+                    generatePdf();
+                  }}
+                >
+                  Download anyway
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null}
+    </>
   );
 }

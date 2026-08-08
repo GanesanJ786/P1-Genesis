@@ -17,6 +17,7 @@ import {
 import { mediaUrl } from "@/lib/storage";
 import { formatDateRange } from "@/lib/utils";
 import { SITE } from "@/lib/constants";
+import { isPastEvent } from "@/lib/events";
 
 // Fresh initial data every ~30s; the client board carries the live delta via
 // Supabase Realtime (with a 10s polling fallback against /api/live/[slug]).
@@ -151,6 +152,7 @@ export default async function LiveEventPage({
               title: event.title,
               showSchedule: event.show_schedule,
             }}
+            isPast={isPastEvent(event)}
             initialItems={items}
             initialAnnouncements={announcements}
             sponsors={pdfSponsors}

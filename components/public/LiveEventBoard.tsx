@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   Search,
   X,
@@ -43,6 +44,10 @@ import type { PdfSponsor } from "@/lib/live-pdf";
 type BoardEvent = { id: string; slug: string; title: string; showSchedule: boolean };
 type Props = {
   event: BoardEvent;
+  /** True once the event's own dates mark it as finished (see isPastEvent()
+   *  in lib/events.ts) — swaps the top "Live" indicator bar for a calmer
+   *  "Completed" one and opens the page on Results instead of Live. */
+  isPast: boolean;
   initialItems: LiveRow[];
   initialAnnouncements: AnnouncementRow[];
   sponsors: PdfSponsor[];
@@ -417,13 +422,15 @@ const PAGE_TABS: { key: PageTab; label: string }[] = [
   { key: "gallery", label: "Gallery" },
 ];
 
-export function LiveEventBoard({ event, initialItems, initialAnnouncements, sponsors }: Props) {
+export function LiveEventBoard({ event, isPast, initialItems, initialAnnouncements, sponsors }: Props) {
   const [items, setItems] = useState<LiveRow[]>(initialItems);
   const [announcements, setAnnouncements] =
     useState<AnnouncementRow[]>(initialAnnouncements);
   // Top-level page section — independent of activeStatus (Finals/Live/
-  // Upcoming/Done), which stays scoped to browsing inside the Live tab.
-  const [activeTab, setActiveTab] = useState<PageTab>("live");
+  // Upcoming/Done), which stays scoped to browsing inside the Live tab. A
+  // finished meet opens on Results instead — there's nothing left "live" to
+  // land on.
+  const [activeTab, setActiveTab] = useState<PageTab>(isPast ? "results" : "live");
   // Schedule is its own tab, but some events opt out entirely (event.showSchedule).
   const pageTabs = event.showSchedule ? PAGE_TABS : PAGE_TABS.filter((t) => t.key !== "schedule");
   // Results tab's own Institution/Category/Event dropdown filters — kept
@@ -902,18 +909,29 @@ export function LiveEventBoard({ event, initialItems, initialAnnouncements, spon
 
   return (
     <div className="space-y-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      {/* Live indicator bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-          </span>
-          <span className="font-display text-lg uppercase tracking-wide text-cream">
-            Live · {event.title}
-          </span>
+      {/* Live/Completed indicator bar */}
+      {isPast ? (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand/15 bg-ink-soft px-5 py-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 size={20} className="shrink-0 text-ember" />
+            <span className="font-display text-lg uppercase tracking-wide text-cream">
+              Completed · {event.title}
+            </span>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+            </span>
+            <span className="font-display text-lg uppercase tracking-wide text-cream">
+              Live · {event.title}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Announcements — delays, lunch break, venue changes */}
       <AnnouncementsFeed announcements={announcements} />
